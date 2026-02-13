@@ -3,6 +3,7 @@
 # See the LICENSE file for details.
 
 # CSV utility functions for safe export
+
 # Characters that trigger formula evaluation in spreadsheet applications
 _CSV_FORMULA_TRIGGERS = frozenset(("=", "+", "-", "@", "\t", "\r", "\n"))
 
