@@ -23,9 +23,11 @@ from drf_spectacular.utils import OpenApiResponse, OpenApiRequest
 from plane.db.models import (
     Cycle,
     Intake,
+    IssueType,
     Module,
     Project,
     DeployBoard,
+    ProjectIssueType,
     ProjectMember,
     State,
     DEFAULT_STATES,
@@ -251,6 +253,23 @@ class ProjectListCreateAPIEndpoint(BaseAPIView):
                         )
                         for state in DEFAULT_STATES
                     ]
+                )
+
+                issue_type, _ = IssueType.objects.get_or_create(
+                    workspace=workspace,
+                    is_default=True,
+                    defaults={
+                        "name": "Task",
+                        "description": "Default work item type",
+                        "is_active": True,
+                        "created_by": request.user,
+                    },
+                )
+                ProjectIssueType.objects.get_or_create(
+                    project=serializer.instance,
+                    issue_type=issue_type,
+                    workspace=workspace,
+                    defaults={"is_default": True, "created_by": request.user},
                 )
 
                 project = self.get_queryset().filter(pk=serializer.instance.id).first()
