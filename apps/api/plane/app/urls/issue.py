@@ -31,6 +31,9 @@ from plane.app.views import (
     WorkItemDescriptionVersionEndpoint,
     IssueMetaEndpoint,
     IssueDetailIdentifierEndpoint,
+    IssueTypePropertyViewSet,
+    IssueTypePropertyOptionViewSet,
+    IssuePropertyValueEndpoint,
 )
 
 urlpatterns = [
@@ -282,5 +285,31 @@ urlpatterns = [
         "workspaces/<str:slug>/work-items/<str:project_identifier>-<str:issue_identifier>/",
         IssueDetailIdentifierEndpoint.as_view(),
         name="issue-detail-identifier",
+    ),
+    # Custom properties
+    path(
+        "workspaces/<str:slug>/issue-types/<uuid:issue_type_id>/properties/",
+        IssueTypePropertyViewSet.as_view({"get": "list", "post": "create"}),
+        name="issue-type-properties",
+    ),
+    path(
+        "workspaces/<str:slug>/issue-types/<uuid:issue_type_id>/properties/<uuid:pk>/",
+        IssueTypePropertyViewSet.as_view({"patch": "partial_update", "delete": "destroy"}),
+        name="issue-type-property-detail",
+    ),
+    path(
+        "workspaces/<str:slug>/issue-types/<uuid:issue_type_id>/properties/<uuid:property_id>/options/",
+        IssueTypePropertyOptionViewSet.as_view({"get": "list", "post": "create"}),
+        name="issue-type-property-options",
+    ),
+    path(
+        "workspaces/<str:slug>/issue-types/<uuid:issue_type_id>/properties/<uuid:property_id>/options/<uuid:pk>/",
+        IssueTypePropertyOptionViewSet.as_view({"patch": "partial_update", "delete": "destroy"}),
+        name="issue-type-property-option-detail",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/issues/<uuid:issue_id>/property-values/",
+        IssuePropertyValueEndpoint.as_view(),
+        name="issue-property-values",
     ),
 ]

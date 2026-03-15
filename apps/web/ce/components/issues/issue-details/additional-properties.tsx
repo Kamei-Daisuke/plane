@@ -5,8 +5,12 @@
  */
 
 import type { FC } from "react";
-import React from "react";
-// plane imports
+import React, { useEffect } from "react";
+import { observer } from "mobx-react";
+// hooks
+import { useIssueProperty } from "@/hooks/store/use-issue-property";
+// components
+import { PropertyField } from "../issue-properties/property-field";
 
 export type TWorkItemAdditionalSidebarProperties = {
   workItemId: string;
@@ -17,6 +21,51 @@ export type TWorkItemAdditionalSidebarProperties = {
   isPeekView?: boolean;
 };
 
-export function WorkItemAdditionalSidebarProperties(_props: TWorkItemAdditionalSidebarProperties) {
-  return <></>;
-}
+export const WorkItemAdditionalSidebarProperties: FC<TWorkItemAdditionalSidebarProperties> = observer(
+  function WorkItemAdditionalSidebarProperties(props) {
+    const { workItemId, workItemTypeId, projectId, workspaceSlug, isEditable } = props;
+    const { propertiesByIssueType, valuesByIssue, fetchProperties, fetchPropertyValues, upsertPropertyValues } =
+      useIssueProperty();
+
+    const properties = workItemTypeId ? (propertiesByIssueType[workItemTypeId] ?? []) : [];
+    const activeProperties = properties.filter((p) => p.is_active);
+    const values = valuesByIssue[`${projectId}:${workItemId}`] ?? {};
+
+    useEffect(() => {
+      if (workItemTypeId) {
+        fetchProperties(workspaceSlug, workItemTypeId);
+      }
+      fetchPropertyValues(workspaceSlug, projectId, workItemId);
+    }, [workItemTypeId, workItemId, projectId, workspaceSlug, fetchProperties, fetchPropertyValues]);
+
+    if (!workItemTypeId || activeProperties.length === 0) return <></>;
+
+    const handleChange = async (propertyId: string, value: unknown) => {
+      if (!isEditable) return;
+      await upsertPropertyValues(workspaceSlug, projectId, workItemId, { [propertyId]: value });
+    };
+
+    return (
+      <>
+        {activeProperties.map((property) => (
+          <div key={property.id} className="flex items-start gap-2 py-2">
+            <span className="text-sm text-custom-text-300 w-1/3 shrink-0 truncate pt-1">
+              {property.display_name}
+              {property.is_required && <span className="text-red-500 ml-0.5">*</span>}
+            </span>
+            <div className="min-w-0 flex-1">
+              <PropertyField
+                property={property}
+                value={values[property.id]}
+                onChange={(v) => handleChange(property.id, v)}
+                workspaceSlug={workspaceSlug}
+                projectId={projectId}
+                disabled={!isEditable}
+              />
+            </div>
+          </div>
+        ))}
+      </>
+    );
+  }
+);
