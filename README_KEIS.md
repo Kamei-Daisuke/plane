@@ -113,6 +113,73 @@ GET  /workspaces/{slug}/projects/{project_id}/issue-types/
 
 ---
 
+### IssueType の自動生成
+
+プロジェクト作成時に、ワークスペース共通のデフォルト IssueType「Task」を自動生成し、プロジェクトに紐づけます。
+これにより、カスタムプロパティ設定画面が空にならずにすぐ使えます。
+
+**変更ファイル**:
+
+- `apps/api/plane/app/views/project/base.py` — プロジェクト作成時の IssueType + ProjectIssueType 自動生成
+- `apps/api/plane/api/views/project.py` — API 経由の作成でも同様
+- `apps/api/plane/db/migrations/0122_backfill_default_issue_type.py` — 既存プロジェクトへのバックフィル
+
+---
+
+### Worklog（作業時間記録）
+
+ワークアイテムに対して、ユーザーが作業時間を記録する機能です。
+
+#### バックエンド
+
+**新規モデル** (`apps/api/plane/db/models/worklog.py`):
+
+- `IssueWorklog` — duration（分）、logged_date、description、logged_by
+
+**API エンドポイント**:
+
+```
+GET/POST   /workspaces/{slug}/projects/{project_id}/issues/{issue_id}/worklogs/
+PATCH/DEL  /workspaces/{slug}/projects/{project_id}/issues/{issue_id}/worklogs/{id}/
+```
+
+- GET: ワークログ一覧 + 合計時間を返す
+- POST: 作業時間を記録
+- PATCH: 自分のログのみ編集可（Admin は全件）
+- DELETE: 自分のログのみ削除可（Admin は全件）
+
+**マイグレーション**: `apps/api/plane/db/migrations/0123_add_issue_worklog.py`
+
+#### フロントエンド
+
+**型定義** (`packages/types/src/issues/worklog.ts`):
+
+- `TIssueWorklog`, `TIssueWorklogListResponse`
+
+**サービス** (`apps/web/core/services/issue/worklog.service.ts`):
+
+- CRUD + 合計時間取得
+
+**MobX ストア** (`apps/web/ce/store/worklog.store.ts`):
+
+- `worklogsByIssue` — `"${projectId}:${issueId}"` をキーとしたログ一覧
+- `totalByIssue` — 合計時間（分）キャッシュ
+
+**時間入力フォーマット** (`utils.ts`):
+
+- `1h 30m`、`90m`、`90`（分数）の各形式を受け付ける
+
+**コンポーネント**:
+
+| ファイル                                                                   | 役割                                               |
+| -------------------------------------------------------------------------- | -------------------------------------------------- |
+| `apps/web/ce/components/issues/worklog/worklog-form.tsx`                   | 時間・日付・メモ入力フォーム                       |
+| `apps/web/ce/components/issues/worklog/activity/worklog-create-button.tsx` | アクティビティ欄の「作業時間を記録」ボタン         |
+| `apps/web/ce/components/issues/worklog/activity/root.tsx`                  | アクティビティ内のワークログ表示（編集・削除付き） |
+| `apps/web/ce/components/issues/worklog/property/root.tsx`                  | サイドバーの合計時間表示（記録ありのみ表示）       |
+
+---
+
 ## ブランチ構成
 
 - ベースブランチ: `origin/preview`（makeplane/plane の最新 CE リリース）
