@@ -5,7 +5,7 @@
  */
 
 import { action, makeObservable, observable, runInAction } from "mobx";
-import type { TIssueTypeProperty, TIssuePropertyValues } from "@plane/types";
+import type { TIssueType, TIssueTypeProperty, TIssueTypePropertyOption, TIssuePropertyValues } from "@plane/types";
 import { IssuePropertyService } from "@/services/issue/issue_property.service";
 
 export interface IIssuePropertyStore {
@@ -14,6 +14,8 @@ export interface IIssuePropertyStore {
   propertiesByIssueType: Record<string, TIssueTypeProperty[]>;
   /** `${projectId}:${issueId}` → {propertyId: value} */
   valuesByIssue: Record<string, TIssuePropertyValues>;
+  /** projectId → list of issue types */
+  issueTypesByProject: Record<string, TIssueType[]>;
   // actions
   fetchProperties(workspaceSlug: string, issueTypeId: string): Promise<TIssueTypeProperty[]>;
   fetchPropertyValues(workspaceSlug: string, projectId: string, issueId: string): Promise<TIssuePropertyValues>;
@@ -23,11 +25,39 @@ export interface IIssuePropertyStore {
     issueId: string,
     values: TIssuePropertyValues
   ): Promise<TIssuePropertyValues>;
+  fetchProjectIssueTypes(workspaceSlug: string, projectId: string): Promise<TIssueType[]>;
+  createProperty(
+    workspaceSlug: string,
+    issueTypeId: string,
+    data: Partial<TIssueTypeProperty>
+  ): Promise<TIssueTypeProperty>;
+  updateProperty(
+    workspaceSlug: string,
+    issueTypeId: string,
+    propertyId: string,
+    data: Partial<TIssueTypeProperty>
+  ): Promise<TIssueTypeProperty>;
+  deleteProperty(workspaceSlug: string, issueTypeId: string, propertyId: string): Promise<void>;
+  createOption(
+    workspaceSlug: string,
+    issueTypeId: string,
+    propertyId: string,
+    data: Partial<TIssueTypePropertyOption>
+  ): Promise<TIssueTypePropertyOption>;
+  updateOption(
+    workspaceSlug: string,
+    issueTypeId: string,
+    propertyId: string,
+    optionId: string,
+    data: Partial<TIssueTypePropertyOption>
+  ): Promise<TIssueTypePropertyOption>;
+  deleteOption(workspaceSlug: string, issueTypeId: string, propertyId: string, optionId: string): Promise<void>;
 }
 
 export class IssuePropertyStore implements IIssuePropertyStore {
   propertiesByIssueType: Record<string, TIssueTypeProperty[]> = {};
   valuesByIssue: Record<string, TIssuePropertyValues> = {};
+  issueTypesByProject: Record<string, TIssueType[]> = {};
 
   private service = new IssuePropertyService();
 
@@ -35,9 +65,17 @@ export class IssuePropertyStore implements IIssuePropertyStore {
     makeObservable(this, {
       propertiesByIssueType: observable,
       valuesByIssue: observable,
+      issueTypesByProject: observable,
       fetchProperties: action,
       fetchPropertyValues: action,
       upsertPropertyValues: action,
+      fetchProjectIssueTypes: action,
+      createProperty: action,
+      updateProperty: action,
+      deleteProperty: action,
+      createOption: action,
+      updateOption: action,
+      deleteOption: action,
     });
   }
 
@@ -71,5 +109,94 @@ export class IssuePropertyStore implements IIssuePropertyStore {
       };
     });
     return updated;
+  }
+
+  async fetchProjectIssueTypes(workspaceSlug: string, projectId: string): Promise<TIssueType[]> {
+    const issueTypes = await this.service.getProjectIssueTypes(workspaceSlug, projectId);
+    runInAction(() => {
+      this.issueTypesByProject[projectId] = issueTypes;
+    });
+    return issueTypes;
+  }
+
+  async createProperty(
+    workspaceSlug: string,
+    issueTypeId: string,
+    data: Partial<TIssueTypeProperty>
+  ): Promise<TIssueTypeProperty> {
+    const property = await this.service.createProperty(workspaceSlug, issueTypeId, data);
+    runInAction(() => {
+      const existing = this.propertiesByIssueType[issueTypeId] ?? [];
+      this.propertiesByIssueType[issueTypeId] = [...existing, property];
+    });
+    return property;
+  }
+
+  async updateProperty(
+    workspaceSlug: string,
+    issueTypeId: string,
+    propertyId: string,
+    data: Partial<TIssueTypeProperty>
+  ): Promise<TIssueTypeProperty> {
+    const updated = await this.service.updateProperty(workspaceSlug, issueTypeId, propertyId, data);
+    runInAction(() => {
+      const existing = this.propertiesByIssueType[issueTypeId] ?? [];
+      this.propertiesByIssueType[issueTypeId] = existing.map((p) => (p.id === propertyId ? updated : p));
+    });
+    return updated;
+  }
+
+  async deleteProperty(workspaceSlug: string, issueTypeId: string, propertyId: string): Promise<void> {
+    await this.service.deleteProperty(workspaceSlug, issueTypeId, propertyId);
+    runInAction(() => {
+      const existing = this.propertiesByIssueType[issueTypeId] ?? [];
+      this.propertiesByIssueType[issueTypeId] = existing.filter((p) => p.id !== propertyId);
+    });
+  }
+
+  async createOption(
+    workspaceSlug: string,
+    issueTypeId: string,
+    propertyId: string,
+    data: Partial<TIssueTypePropertyOption>
+  ): Promise<TIssueTypePropertyOption> {
+    const option = await this.service.createOption(workspaceSlug, issueTypeId, propertyId, data);
+    runInAction(() => {
+      const props = this.propertiesByIssueType[issueTypeId] ?? [];
+      this.propertiesByIssueType[issueTypeId] = props.map((p) => {
+        if (p.id !== propertyId) return p;
+        return Object.assign({}, p, { options: [...p.options, option] });
+      });
+    });
+    return option;
+  }
+
+  async updateOption(
+    workspaceSlug: string,
+    issueTypeId: string,
+    propertyId: string,
+    optionId: string,
+    data: Partial<TIssueTypePropertyOption>
+  ): Promise<TIssueTypePropertyOption> {
+    const updated = await this.service.updateOption(workspaceSlug, issueTypeId, propertyId, optionId, data);
+    runInAction(() => {
+      const props = this.propertiesByIssueType[issueTypeId] ?? [];
+      this.propertiesByIssueType[issueTypeId] = props.map((p) => {
+        if (p.id !== propertyId) return p;
+        return Object.assign({}, p, { options: p.options.map((o) => (o.id === optionId ? updated : o)) });
+      });
+    });
+    return updated;
+  }
+
+  async deleteOption(workspaceSlug: string, issueTypeId: string, propertyId: string, optionId: string): Promise<void> {
+    await this.service.deleteOption(workspaceSlug, issueTypeId, propertyId, optionId);
+    runInAction(() => {
+      const props = this.propertiesByIssueType[issueTypeId] ?? [];
+      this.propertiesByIssueType[issueTypeId] = props.map((p) => {
+        if (p.id !== propertyId) return p;
+        return Object.assign({}, p, { options: p.options.filter((o) => o.id !== optionId) });
+      });
+    });
   }
 }

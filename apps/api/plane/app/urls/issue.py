@@ -34,6 +34,7 @@ from plane.app.views import (
     IssueTypePropertyViewSet,
     IssueTypePropertyOptionViewSet,
     IssuePropertyValueEndpoint,
+    ProjectIssueTypeListView,
 )
 
 urlpatterns = [
@@ -285,6 +286,12 @@ urlpatterns = [
         "workspaces/<str:slug>/work-items/<str:project_identifier>-<str:issue_identifier>/",
         IssueDetailIdentifierEndpoint.as_view(),
         name="issue-detail-identifier",
+    ),
+    # Project issue types
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/issue-types/",
+        ProjectIssueTypeListView.as_view(),
+        name="project-issue-types",
     ),
     # Custom properties
     path(

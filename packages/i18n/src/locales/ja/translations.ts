@@ -1952,6 +1952,9 @@ export default {
         },
       },
     },
+    custom_properties: {
+      label: "カスタムプロパティ",
+    },
     automations: {
       label: "自動化",
       "auto-archive": {

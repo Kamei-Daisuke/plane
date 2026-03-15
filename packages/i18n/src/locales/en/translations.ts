@@ -1820,6 +1820,9 @@ export default {
         },
       },
     },
+    custom_properties: {
+      label: "Custom Properties",
+    },
     automations: {
       label: "Automations",
       heading: "Automations",
