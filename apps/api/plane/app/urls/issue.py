@@ -35,6 +35,7 @@ from plane.app.views import (
     IssueTypePropertyOptionViewSet,
     IssuePropertyValueEndpoint,
     ProjectIssueTypeListView,
+    IssueWorklogViewSet,
 )
 
 urlpatterns = [
@@ -318,5 +319,16 @@ urlpatterns = [
         "workspaces/<str:slug>/projects/<uuid:project_id>/issues/<uuid:issue_id>/property-values/",
         IssuePropertyValueEndpoint.as_view(),
         name="issue-property-values",
+    ),
+    # Worklogs
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/issues/<uuid:issue_id>/worklogs/",
+        IssueWorklogViewSet.as_view({"get": "list", "post": "create"}),
+        name="issue-worklogs",
+    ),
+    path(
+        "workspaces/<str:slug>/projects/<uuid:project_id>/issues/<uuid:issue_id>/worklogs/<uuid:pk>/",
+        IssueWorklogViewSet.as_view({"patch": "partial_update", "delete": "destroy"}),
+        name="issue-worklog-detail",
     ),
 ]

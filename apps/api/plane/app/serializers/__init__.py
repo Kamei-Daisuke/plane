@@ -141,3 +141,4 @@ from .issue_property import (
     IssuePropertyValueSerializer,
     IssuePropertyValueBulkSerializer,
 )
+from .worklog import IssueWorklogSerializer

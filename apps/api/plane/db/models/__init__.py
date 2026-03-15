@@ -81,6 +81,7 @@ from .favorite import UserFavorite
 
 from .issue_type import IssueType, ProjectIssueType
 from .issue_property import IssueTypeProperty, IssueTypePropertyOption, IssuePropertyValue
+from .worklog import IssueWorklog
 
 from .recent_visit import UserRecentVisit
 
