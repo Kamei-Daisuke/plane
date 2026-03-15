@@ -160,6 +160,7 @@ from .issue.property import (
     IssuePropertyValueEndpoint,
     ProjectIssueTypeListView,
 )
+from .issue.worklog import IssueWorklogViewSet
 
 from .module.base import (
     ModuleViewSet,
