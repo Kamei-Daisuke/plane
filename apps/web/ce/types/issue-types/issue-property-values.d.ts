@@ -1,2 +1,1 @@
-export type TIssuePropertyValues = object;
-export type TIssuePropertyValueErrors = object;
+export type { TIssuePropertyValues, TIssuePropertyValueErrors } from "@plane/types";
