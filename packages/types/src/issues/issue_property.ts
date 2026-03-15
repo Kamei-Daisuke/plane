@@ -4,6 +4,16 @@
  * See the LICENSE file for details.
  */
 
+export type TIssueType = {
+  id: string;
+  name: string;
+  description: string;
+  logo_props: Record<string, unknown>;
+  is_epic: boolean;
+  is_default: boolean;
+  is_active: boolean;
+};
+
 export type TIssuePropertyType =
   | "text"
   | "number"

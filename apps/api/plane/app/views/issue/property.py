@@ -14,9 +14,50 @@ from plane.app.serializers import (
     IssueTypePropertyOptionSerializer,
     IssuePropertyValueSerializer,
 )
-from plane.db.models import Issue, IssueType, IssueTypeProperty, IssueTypePropertyOption, IssuePropertyValue
+from plane.app.serializers.base import BaseSerializer
+from plane.db.models import (
+    Issue,
+    IssueType,
+    IssueTypeProperty,
+    IssueTypePropertyOption,
+    IssuePropertyValue,
+    ProjectIssueType,
+)
 
 from .. import BaseViewSet, BaseAPIView
+
+
+class IssueTypeSerializer(BaseSerializer):
+    class Meta:
+        model = IssueType
+        fields = ["id", "name", "description", "logo_props", "is_epic", "is_default", "is_active"]
+        read_only_fields = fields
+
+
+class ProjectIssueTypeListView(BaseAPIView):
+    """List issue types available for a project.
+
+    URL: workspaces/<slug>/projects/<project_id>/issue-types/
+    """
+
+    permission_classes = [WorkSpaceBasePermission]
+
+    def get(self, request, slug, project_id):
+        issue_type_ids = ProjectIssueType.objects.filter(
+            workspace__slug=slug,
+            project_id=project_id,
+            deleted_at__isnull=True,
+        ).values_list("issue_type_id", flat=True)
+
+        issue_types = IssueType.objects.filter(
+            pk__in=issue_type_ids,
+            workspace__slug=slug,
+            is_active=True,
+            deleted_at__isnull=True,
+        ).order_by("name")
+
+        serializer = IssueTypeSerializer(issue_types, many=True)
+        return Response(serializer.data)
 
 
 class IssueTypePropertyViewSet(BaseViewSet):
