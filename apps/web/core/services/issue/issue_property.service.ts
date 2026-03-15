@@ -5,12 +5,22 @@
  */
 
 import { API_BASE_URL } from "@plane/constants";
-import type { TIssueTypeProperty, TIssueTypePropertyOption, TIssuePropertyValues } from "@plane/types";
+import type { TIssueType, TIssueTypeProperty, TIssueTypePropertyOption, TIssuePropertyValues } from "@plane/types";
 import { APIService } from "@/services/api.service";
 
 export class IssuePropertyService extends APIService {
   constructor() {
     super(API_BASE_URL);
+  }
+
+  // ── Project issue types ───────────────────────────────────────────────
+
+  async getProjectIssueTypes(workspaceSlug: string, projectId: string): Promise<TIssueType[]> {
+    return this.get(`/api/workspaces/${workspaceSlug}/projects/${projectId}/issue-types/`)
+      .then((r) => r?.data)
+      .catch((e) => {
+        throw e?.response?.data;
+      });
   }
 
   // ── Property definitions ──────────────────────────────────────────────
