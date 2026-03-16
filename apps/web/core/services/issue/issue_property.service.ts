@@ -5,7 +5,13 @@
  */
 
 import { API_BASE_URL } from "@plane/constants";
-import type { TIssueType, TIssueTypeProperty, TIssueTypePropertyOption, TIssuePropertyValues } from "@plane/types";
+import type {
+  TIssueType,
+  TIssueTypeProperty,
+  TIssueTypePropertyOption,
+  TIssuePropertyValues,
+  TProjectPropertyValuesBulkResponse,
+} from "@plane/types";
 import { APIService } from "@/services/api.service";
 
 export class IssuePropertyService extends APIService {
@@ -127,6 +133,19 @@ export class IssuePropertyService extends APIService {
 
   async getPropertyValues(workspaceSlug: string, projectId: string, issueId: string): Promise<TIssuePropertyValues> {
     return this.get(`/api/workspaces/${workspaceSlug}/projects/${projectId}/issues/${issueId}/property-values/`)
+      .then((r) => r?.data)
+      .catch((e) => {
+        throw e?.response?.data;
+      });
+  }
+
+  async getBulkPropertyValues(
+    workspaceSlug: string,
+    projectId: string,
+    issueIds: string[]
+  ): Promise<TProjectPropertyValuesBulkResponse> {
+    const params = new URLSearchParams({ issue_ids: issueIds.join(",") });
+    return this.get(`/api/workspaces/${workspaceSlug}/projects/${projectId}/property-values/?${params}`)
       .then((r) => r?.data)
       .catch((e) => {
         throw e?.response?.data;

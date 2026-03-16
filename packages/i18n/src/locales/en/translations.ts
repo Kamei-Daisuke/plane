@@ -2742,6 +2742,25 @@ export default {
       help: "Help",
     },
   },
+  // Worklog
+  worklog: {
+    label: "Time logged",
+    duration_label: "Duration",
+    date_label: "Date",
+    memo_label: "Memo",
+    duration_placeholder: "e.g. 1h 30m, 90m, 90",
+    memo_placeholder: "Work description (optional)",
+    record: "Log",
+    update: "Update",
+    cancel: "Cancel",
+    log_time: "Log time",
+    error: {
+      invalid_duration: "e.g. 1h 30m, 90m, 90",
+      date_required: "Date is required",
+      save_failed: "Failed to save",
+    },
+    confirm_delete: "Delete this worklog?",
+  },
   // Navigation customization
   customize_navigation: "Customize navigation",
   personal: "Personal",

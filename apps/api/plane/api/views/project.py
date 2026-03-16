@@ -6,7 +6,7 @@
 import json
 
 # Django imports
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Exists, F, Func, OuterRef, Prefetch, Q, Subquery, Count
 from django.db.models.functions import Coalesce
 from django.utils import timezone
@@ -255,22 +255,23 @@ class ProjectListCreateAPIEndpoint(BaseAPIView):
                     ]
                 )
 
-                issue_type, _ = IssueType.objects.get_or_create(
-                    workspace=workspace,
-                    is_default=True,
-                    defaults={
-                        "name": "Task",
-                        "description": "Default work item type",
-                        "is_active": True,
-                        "created_by": request.user,
-                    },
-                )
-                ProjectIssueType.objects.get_or_create(
-                    project=serializer.instance,
-                    issue_type=issue_type,
-                    workspace=workspace,
-                    defaults={"is_default": True, "created_by": request.user},
-                )
+                with transaction.atomic():
+                    issue_type, _ = IssueType.objects.select_for_update().get_or_create(
+                        workspace=workspace,
+                        is_default=True,
+                        defaults={
+                            "name": "Task",
+                            "description": "Default work item type",
+                            "is_active": True,
+                            "created_by": request.user,
+                        },
+                    )
+                    ProjectIssueType.objects.get_or_create(
+                        project=serializer.instance,
+                        issue_type=issue_type,
+                        workspace=workspace,
+                        defaults={"is_default": True, "created_by": request.user},
+                    )
 
                 project = self.get_queryset().filter(pk=serializer.instance.id).first()
 

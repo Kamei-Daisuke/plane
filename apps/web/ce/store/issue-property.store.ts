@@ -19,6 +19,7 @@ export interface IIssuePropertyStore {
   // actions
   fetchProperties(workspaceSlug: string, issueTypeId: string): Promise<TIssueTypeProperty[]>;
   fetchPropertyValues(workspaceSlug: string, projectId: string, issueId: string): Promise<TIssuePropertyValues>;
+  fetchBulkPropertyValues(workspaceSlug: string, projectId: string, issueIds: string[]): Promise<void>;
   upsertPropertyValues(
     workspaceSlug: string,
     projectId: string,
@@ -68,6 +69,7 @@ export class IssuePropertyStore implements IIssuePropertyStore {
       issueTypesByProject: observable,
       fetchProperties: action,
       fetchPropertyValues: action,
+      fetchBulkPropertyValues: action,
       upsertPropertyValues: action,
       fetchProjectIssueTypes: action,
       createProperty: action,
@@ -93,6 +95,16 @@ export class IssuePropertyStore implements IIssuePropertyStore {
       this.valuesByIssue[`${projectId}:${issueId}`] = values;
     });
     return values;
+  }
+
+  async fetchBulkPropertyValues(workspaceSlug: string, projectId: string, issueIds: string[]): Promise<void> {
+    if (issueIds.length === 0) return;
+    const bulk = await this.service.getBulkPropertyValues(workspaceSlug, projectId, issueIds);
+    runInAction(() => {
+      for (const [issueId, values] of Object.entries(bulk)) {
+        this.valuesByIssue[`${projectId}:${issueId}`] = values;
+      }
+    });
   }
 
   async upsertPropertyValues(

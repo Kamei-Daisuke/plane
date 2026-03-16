@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 import { Clock } from "lucide-react";
+import { useTranslation } from "@plane/i18n";
 import { useWorklog } from "@/hooks/store/use-worklog";
 import { WorklogForm } from "../worklog-form";
 
@@ -22,6 +23,7 @@ export function IssueActivityWorklogCreateButton({
   issueId,
   disabled,
 }: TIssueActivityWorklogCreateButton) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const { createWorklog } = useWorklog();
 
@@ -48,7 +50,7 @@ export function IssueActivityWorklogCreateButton({
       className="border-custom-border-200 text-xs text-custom-text-200 hover:border-custom-primary-100 hover:text-custom-primary-100 flex items-center gap-1.5 rounded border px-2.5 py-1 transition-colors"
     >
       <Clock className="h-3.5 w-3.5" />
-      作業時間を記録
+      {t("worklog.log_time")}
     </button>
   );
 }
