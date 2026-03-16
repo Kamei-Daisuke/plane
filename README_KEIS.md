@@ -31,6 +31,14 @@ Plane の CE/EE スタブアーキテクチャ（`apps/web/ce/` に CE 実装を
 
 #### バックエンド（Django）
 
+**バルクフェッチエンドポイント** (追加):
+
+```
+GET /workspaces/{slug}/projects/{project_id}/property-values/?issue_ids=id1,id2,...
+```
+
+レスポンス: `{issue_id: {property_id: value, ...}, ...}` — 一覧ビュー向けの一括取得用。
+
 **新規モデル** (`apps/api/plane/db/models/issue_property.py`):
 
 - `IssueTypeProperty` — プロパティ定義（名前、型、必須フラグ、有効フラグ）
@@ -173,10 +181,37 @@ PATCH/DEL  /workspaces/{slug}/projects/{project_id}/issues/{issue_id}/worklogs/{
 
 | ファイル                                                                   | 役割                                               |
 | -------------------------------------------------------------------------- | -------------------------------------------------- |
-| `apps/web/ce/components/issues/worklog/worklog-form.tsx`                   | 時間・日付・メモ入力フォーム                       |
+| `apps/web/ce/components/issues/worklog/worklog-form.tsx`                   | 時間・日付・メモ入力フォーム（i18n 対応済み）      |
 | `apps/web/ce/components/issues/worklog/activity/worklog-create-button.tsx` | アクティビティ欄の「作業時間を記録」ボタン         |
 | `apps/web/ce/components/issues/worklog/activity/root.tsx`                  | アクティビティ内のワークログ表示（編集・削除付き） |
+| `apps/web/ce/components/issues/worklog/activity/filter-root.tsx`           | アクティビティフィルタ拡張（CE スタブ）            |
 | `apps/web/ce/components/issues/worklog/property/root.tsx`                  | サイドバーの合計時間表示（記録ありのみ表示）       |
+
+**差し込み箇所**:
+
+- アクティビティヘッダー: `apps/web/core/components/issues/issue-detail/issue-activity/root.tsx`
+- アクティビティ一覧: `apps/web/core/components/issues/issue-detail/issue-activity/activity-comment-root.tsx`（`activity_type === "WORKLOG"` で分岐）
+- Issue サイドバー: `apps/web/core/components/issues/issue-detail/sidebar.tsx`
+- Peek OverView: `apps/web/core/components/issues/peek-overview/properties.tsx`
+
+**i18n**:
+
+翻訳キー `worklog.*` を EN/JA に追加済み（`packages/i18n/src/locales/`）。
+
+**アクティビティフィルタ**:
+
+`packages/constants/src/issue/filter.ts` の `EActivityFilterType` に `WORKLOG` を追加し、`ACTIVITY_FILTER_TYPE_OPTIONS` と `defaultActivityFilters` にも反映。これにより、アクティビティフィルタ UI に「作業時間」が表示され、フィルタリングが機能する。
+
+**バグ修正・改善（セルフレビュー後）**:
+
+- タイムゾーンバグ修正: `new Date().toISOString()` → `new Date().toLocaleDateString("en-CA")`
+- 削除確認ダイアログ + エラーハンドリング追加
+- race condition 対策: IssueType `get_or_create` を `transaction.atomic()` + `select_for_update()` でラップ
+- `use-worklog.ts` の不要な `as unknown as` キャスト削除
+- フィルタバグ修正: `WORKLOG` が `EActivityFilterType` に未定義でワークログが常に非表示になっていた問題を修正
+- アクティビティフィード表示バグ修正: `activity.store.ts` の `buildActivityAndCommentItems` がワークログを含めていなかった問題を修正。CE store で `WorklogStore.worklogsByIssue` を参照し WORKLOG エントリを注入するよう改修
+- UI 権限チェック追加: 編集・削除ボタンを作成者または Admin のみに表示（`useUser` + `useUserPermissions` で判定）
+- DB インデックス追加: `0124_worklog_indices.py` で `(issue, -logged_date, -created_at)` 複合インデックスと `logged_by` インデックスを追加
 
 ---
 

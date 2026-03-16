@@ -5,8 +5,9 @@
  */
 
 import type { FC } from "react";
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { observer } from "mobx-react";
+import { useParams } from "next/navigation";
 import type { IIssueDisplayProperties, TIssue } from "@plane/types";
 // hooks
 import { useIssueProperty } from "@/hooks/store/use-issue-property";
@@ -18,9 +19,18 @@ export type TWorkItemLayoutAdditionalProperties = {
 
 export const WorkItemLayoutAdditionalProperties: FC<TWorkItemLayoutAdditionalProperties> = observer(
   function WorkItemLayoutAdditionalProperties({ issue }) {
-    const { propertiesByIssueType, valuesByIssue } = useIssueProperty();
+    const { propertiesByIssueType, valuesByIssue, fetchPropertyValues } = useIssueProperty();
+    const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
     const typeId = issue.type_id;
     const projectId = issue.project_id;
+
+    const fetchedRef = useRef(false);
+    useEffect(() => {
+      if (!workspaceSlug || !projectId || !issue.id) return;
+      if (fetchedRef.current) return;
+      fetchedRef.current = true;
+      fetchPropertyValues(workspaceSlug, projectId, issue.id);
+    }, [workspaceSlug, projectId, issue.id, fetchPropertyValues]);
 
     if (!typeId || !projectId) return <></>;
 
