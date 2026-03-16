@@ -185,6 +185,40 @@ class IssueTypePropertyOptionViewSet(BaseViewSet):
         return super().destroy(request, *args, **kwargs)
 
 
+class ProjectPropertyValuesBulkEndpoint(BaseAPIView):
+    """Bulk-fetch custom property values for multiple issues in a project.
+
+    URL: workspaces/<slug>/projects/<project_id>/property-values/
+    GET ?issue_ids=<uuid>,<uuid>,...  → {issue_id: {property_id: value}}
+    """
+
+    permission_classes = [ProjectBasePermission]
+
+    def get(self, request, slug, project_id):
+        raw = request.query_params.get("issue_ids", "")
+        issue_ids = [i.strip() for i in raw.split(",") if i.strip()]
+        if not issue_ids:
+            return Response({})
+
+        values = (
+            IssuePropertyValue.objects.filter(
+                issue__workspace__slug=slug,
+                issue__project_id=project_id,
+                issue_id__in=issue_ids,
+            )
+            .select_related("property")
+        )
+
+        result: dict = {}
+        for v in values:
+            issue_key = str(v.issue_id)
+            if issue_key not in result:
+                result[issue_key] = {}
+            result[issue_key][str(v.property_id)] = v.value
+
+        return Response(result)
+
+
 class IssuePropertyValueEndpoint(BaseAPIView):
     """Get and bulk-upsert custom property values for an issue.
 

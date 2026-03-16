@@ -2685,4 +2685,23 @@ export default {
     close_button: "ナビゲーションパネルを閉じる",
     outline_floating_button: "アウトラインを開く",
   },
+  // Worklog
+  worklog: {
+    label: "作業時間",
+    duration_label: "作業時間",
+    date_label: "日付",
+    memo_label: "メモ",
+    duration_placeholder: "例: 1h 30m, 90m, 90",
+    memo_placeholder: "作業内容（任意）",
+    record: "記録",
+    update: "更新",
+    cancel: "キャンセル",
+    log_time: "作業時間を記録",
+    error: {
+      invalid_duration: "例: 1h 30m、90m、90",
+      date_required: "日付は必須です",
+      save_failed: "保存に失敗しました",
+    },
+    confirm_delete: "このワークログを削除しますか？",
+  },
 } as const;

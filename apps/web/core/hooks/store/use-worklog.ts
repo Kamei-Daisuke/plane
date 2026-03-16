@@ -11,5 +11,5 @@ import type { IWorklogStore } from "@/plane-web/store/worklog.store";
 export const useWorklog = (): IWorklogStore => {
   const context = useContext(StoreContext);
   if (context === undefined) throw new Error("useWorklog must be used within StoreProvider");
-  return (context as unknown as { worklogStore: IWorklogStore }).worklogStore;
+  return context.worklogStore;
 };

@@ -23,6 +23,7 @@ import { EIssueServiceType } from "@plane/types";
 import { IssueActivityService } from "@/services/issue";
 // store
 import type { CoreRootStore } from "@/store/root.store";
+import type { RootStore } from "@/plane-web/store/root.store";
 
 export type TActivityLoader = "fetch" | "mutate" | undefined;
 
@@ -125,6 +126,21 @@ export class IssueActivityStore implements IIssueActivityStore {
       });
     });
 
+    // Inject worklog entries from WorklogStore (CE-only)
+    const worklogsByIssue = (this.store as unknown as RootStore)?.worklogStore?.worklogsByIssue;
+    if (worklogsByIssue) {
+      Object.entries(worklogsByIssue).forEach(([key, worklogs]) => {
+        if (!key.endsWith(`:${issueId}`)) return;
+        worklogs.forEach((worklog) => {
+          activityComments.push({
+            id: worklog.id,
+            activity_type: EActivityFilterType.WORKLOG,
+            created_at: worklog.created_at,
+          });
+        });
+      });
+    }
+
     return activityComments;
   }
 
@@ -160,9 +176,9 @@ export class IssueActivityStore implements IIssueActivityStore {
       const activityIds = activities.map((activity) => activity.id);
 
       runInAction(() => {
-        update(this.activities, issueId, (currentActivityIds) => {
-          if (!currentActivityIds) return activityIds;
-          return uniq(concat(currentActivityIds, activityIds));
+        update(this.activities, issueId, (existingActivityIds) => {
+          if (!existingActivityIds) return activityIds;
+          return uniq(concat(existingActivityIds, activityIds));
         });
         activities.forEach((activity) => {
           set(this.activityMap, activity.id, activity);

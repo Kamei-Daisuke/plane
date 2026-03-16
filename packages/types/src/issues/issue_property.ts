@@ -67,3 +67,6 @@ export type TIssuePropertyValues = Record<string, unknown>;
 
 /** Keyed by property UUID, value is the validation error message. */
 export type TIssuePropertyValueErrors = Record<string, string>;
+
+/** Bulk property values response: issueId → {propertyId: value} */
+export type TProjectPropertyValuesBulkResponse = Record<string, TIssuePropertyValues>;
