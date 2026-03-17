@@ -39,7 +39,7 @@ export const ProjectCustomPropertiesRoot = observer(function ProjectCustomProper
         )}
         {issueTypes.map((issueType) => (
           <div key={issueType.id} className="py-6 first:pt-0">
-            <IssueTypeSection issueType={issueType} workspaceSlug={workspaceSlug} />
+            <IssueTypeSection issueType={issueType} workspaceSlug={workspaceSlug} projectId={projectId} />
           </div>
         ))}
       </div>

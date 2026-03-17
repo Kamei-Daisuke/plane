@@ -29,30 +29,40 @@ export interface IIssuePropertyStore {
   fetchProjectIssueTypes(workspaceSlug: string, projectId: string): Promise<TIssueType[]>;
   createProperty(
     workspaceSlug: string,
+    projectId: string,
     issueTypeId: string,
     data: Partial<TIssueTypeProperty>
   ): Promise<TIssueTypeProperty>;
   updateProperty(
     workspaceSlug: string,
+    projectId: string,
     issueTypeId: string,
     propertyId: string,
     data: Partial<TIssueTypeProperty>
   ): Promise<TIssueTypeProperty>;
-  deleteProperty(workspaceSlug: string, issueTypeId: string, propertyId: string): Promise<void>;
+  deleteProperty(workspaceSlug: string, projectId: string, issueTypeId: string, propertyId: string): Promise<void>;
   createOption(
     workspaceSlug: string,
+    projectId: string,
     issueTypeId: string,
     propertyId: string,
     data: Partial<TIssueTypePropertyOption>
   ): Promise<TIssueTypePropertyOption>;
   updateOption(
     workspaceSlug: string,
+    projectId: string,
     issueTypeId: string,
     propertyId: string,
     optionId: string,
     data: Partial<TIssueTypePropertyOption>
   ): Promise<TIssueTypePropertyOption>;
-  deleteOption(workspaceSlug: string, issueTypeId: string, propertyId: string, optionId: string): Promise<void>;
+  deleteOption(
+    workspaceSlug: string,
+    projectId: string,
+    issueTypeId: string,
+    propertyId: string,
+    optionId: string
+  ): Promise<void>;
 }
 
 export class IssuePropertyStore implements IIssuePropertyStore {
@@ -67,17 +77,17 @@ export class IssuePropertyStore implements IIssuePropertyStore {
       propertiesByIssueType: observable,
       valuesByIssue: observable,
       issueTypesByProject: observable,
-      fetchProperties: action,
-      fetchPropertyValues: action,
-      fetchBulkPropertyValues: action,
-      upsertPropertyValues: action,
-      fetchProjectIssueTypes: action,
-      createProperty: action,
-      updateProperty: action,
-      deleteProperty: action,
-      createOption: action,
-      updateOption: action,
-      deleteOption: action,
+      fetchProperties: action.bound,
+      fetchPropertyValues: action.bound,
+      fetchBulkPropertyValues: action.bound,
+      upsertPropertyValues: action.bound,
+      fetchProjectIssueTypes: action.bound,
+      createProperty: action.bound,
+      updateProperty: action.bound,
+      deleteProperty: action.bound,
+      createOption: action.bound,
+      updateOption: action.bound,
+      deleteOption: action.bound,
     });
   }
 
@@ -133,10 +143,11 @@ export class IssuePropertyStore implements IIssuePropertyStore {
 
   async createProperty(
     workspaceSlug: string,
+    projectId: string,
     issueTypeId: string,
     data: Partial<TIssueTypeProperty>
   ): Promise<TIssueTypeProperty> {
-    const property = await this.service.createProperty(workspaceSlug, issueTypeId, data);
+    const property = await this.service.createProperty(workspaceSlug, projectId, issueTypeId, data);
     runInAction(() => {
       const existing = this.propertiesByIssueType[issueTypeId] ?? [];
       this.propertiesByIssueType[issueTypeId] = [...existing, property];
@@ -146,11 +157,12 @@ export class IssuePropertyStore implements IIssuePropertyStore {
 
   async updateProperty(
     workspaceSlug: string,
+    projectId: string,
     issueTypeId: string,
     propertyId: string,
     data: Partial<TIssueTypeProperty>
   ): Promise<TIssueTypeProperty> {
-    const updated = await this.service.updateProperty(workspaceSlug, issueTypeId, propertyId, data);
+    const updated = await this.service.updateProperty(workspaceSlug, projectId, issueTypeId, propertyId, data);
     runInAction(() => {
       const existing = this.propertiesByIssueType[issueTypeId] ?? [];
       this.propertiesByIssueType[issueTypeId] = existing.map((p) => (p.id === propertyId ? updated : p));
@@ -158,8 +170,8 @@ export class IssuePropertyStore implements IIssuePropertyStore {
     return updated;
   }
 
-  async deleteProperty(workspaceSlug: string, issueTypeId: string, propertyId: string): Promise<void> {
-    await this.service.deleteProperty(workspaceSlug, issueTypeId, propertyId);
+  async deleteProperty(workspaceSlug: string, projectId: string, issueTypeId: string, propertyId: string): Promise<void> {
+    await this.service.deleteProperty(workspaceSlug, projectId, issueTypeId, propertyId);
     runInAction(() => {
       const existing = this.propertiesByIssueType[issueTypeId] ?? [];
       this.propertiesByIssueType[issueTypeId] = existing.filter((p) => p.id !== propertyId);
@@ -168,11 +180,12 @@ export class IssuePropertyStore implements IIssuePropertyStore {
 
   async createOption(
     workspaceSlug: string,
+    projectId: string,
     issueTypeId: string,
     propertyId: string,
     data: Partial<TIssueTypePropertyOption>
   ): Promise<TIssueTypePropertyOption> {
-    const option = await this.service.createOption(workspaceSlug, issueTypeId, propertyId, data);
+    const option = await this.service.createOption(workspaceSlug, projectId, issueTypeId, propertyId, data);
     runInAction(() => {
       const props = this.propertiesByIssueType[issueTypeId] ?? [];
       this.propertiesByIssueType[issueTypeId] = props.map((p) => {
@@ -185,12 +198,13 @@ export class IssuePropertyStore implements IIssuePropertyStore {
 
   async updateOption(
     workspaceSlug: string,
+    projectId: string,
     issueTypeId: string,
     propertyId: string,
     optionId: string,
     data: Partial<TIssueTypePropertyOption>
   ): Promise<TIssueTypePropertyOption> {
-    const updated = await this.service.updateOption(workspaceSlug, issueTypeId, propertyId, optionId, data);
+    const updated = await this.service.updateOption(workspaceSlug, projectId, issueTypeId, propertyId, optionId, data);
     runInAction(() => {
       const props = this.propertiesByIssueType[issueTypeId] ?? [];
       this.propertiesByIssueType[issueTypeId] = props.map((p) => {
@@ -201,8 +215,14 @@ export class IssuePropertyStore implements IIssuePropertyStore {
     return updated;
   }
 
-  async deleteOption(workspaceSlug: string, issueTypeId: string, propertyId: string, optionId: string): Promise<void> {
-    await this.service.deleteOption(workspaceSlug, issueTypeId, propertyId, optionId);
+  async deleteOption(
+    workspaceSlug: string,
+    projectId: string,
+    issueTypeId: string,
+    propertyId: string,
+    optionId: string
+  ): Promise<void> {
+    await this.service.deleteOption(workspaceSlug, projectId, issueTypeId, propertyId, optionId);
     runInAction(() => {
       const props = this.propertiesByIssueType[issueTypeId] ?? [];
       this.propertiesByIssueType[issueTypeId] = props.map((p) => {
