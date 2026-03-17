@@ -3,6 +3,7 @@
 # See the LICENSE file for details.
 
 from django.db.models import Sum
+from django.utils import timezone
 
 from rest_framework import status
 from rest_framework.response import Response
@@ -15,12 +16,19 @@ from .. import BaseViewSet
 
 
 def _is_project_admin(request, project_id):
-    return ProjectMember.objects.filter(
-        project_id=project_id,
-        member=request.user,
-        role__gte=20,
-        deleted_at__isnull=True,
-    ).exists()
+    cache_attr = f"_is_project_admin_{project_id}"
+    if not hasattr(request, cache_attr):
+        setattr(
+            request,
+            cache_attr,
+            ProjectMember.objects.filter(
+                project_id=project_id,
+                member=request.user,
+                role__gte=20,
+                deleted_at__isnull=True,
+            ).exists(),
+        )
+    return getattr(request, cache_attr)
 
 
 class IssueWorklogViewSet(BaseViewSet):
@@ -87,5 +95,6 @@ class IssueWorklogViewSet(BaseViewSet):
         is_admin = _is_project_admin(request, project_id)
         if not (is_owner or is_admin):
             return Response({"error": "You can only delete your own worklogs"}, status=status.HTTP_403_FORBIDDEN)
-        instance.delete()
+        instance.deleted_at = timezone.now()
+        instance.save(update_fields=["deleted_at"])
         return Response(status=status.HTTP_204_NO_CONTENT)

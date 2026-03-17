@@ -6,13 +6,13 @@
 
 import React from "react";
 import type { TIssueTypeProperty, TIssueTypePropertyOption } from "@plane/types";
+import { useTranslation } from "@plane/i18n";
 import { MemberDropdown } from "@/components/dropdowns/member/dropdown";
 
 type Props = {
   property: TIssueTypeProperty;
   value: unknown;
   onChange: (value: unknown) => void;
-  workspaceSlug: string;
   projectId: string;
   disabled?: boolean;
   error?: string;
@@ -67,7 +67,7 @@ function SelectField({
           </button>
         );
       })}
-      {activeOptions.length === 0 && <span className="text-xs text-custom-text-400">No options defined</span>}
+      {activeOptions.length === 0 && <span className="text-xs text-custom-text-400">—</span>}
     </div>
   );
 }
@@ -76,11 +76,11 @@ export function PropertyField({
   property,
   value,
   onChange,
-  workspaceSlug: _workspaceSlug,
   projectId,
   disabled,
   error,
 }: Props) {
+  const { t } = useTranslation();
   const { property_type, display_name } = property;
 
   const renderInput = () => {
@@ -152,7 +152,7 @@ export function PropertyField({
             onChange={(v) => onChange(v)}
             projectId={projectId}
             disabled={disabled}
-            placeholder="Select member"
+            placeholder={t("project_settings.custom_properties.select_member")}
             buttonVariant="border-with-text"
             buttonClassName="text-sm"
             showUserDetails
@@ -167,7 +167,7 @@ export function PropertyField({
             projectId={projectId}
             disabled={disabled}
             multiple
-            placeholder="Select members"
+            placeholder={t("project_settings.custom_properties.select_members")}
             buttonVariant="border-with-text"
             buttonClassName="text-sm"
             showUserDetails

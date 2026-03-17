@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { useController } from "react-hook-form";
 import type { Control } from "react-hook-form";
@@ -54,8 +54,10 @@ export function IssueTypeSelect<T extends Partial<TIssueFields>>(props: TIssueTy
 
   const issueTypes = projectId ? (issueTypesByProject[projectId] ?? []) : [];
 
+  const autoSelectedRef = useRef(false);
   useEffect(() => {
-    if (!value && issueTypes.length > 0) {
+    if (!value && issueTypes.length > 0 && !autoSelectedRef.current) {
+      autoSelectedRef.current = true;
       onChange(issueTypes[0].id);
       handleFormChange?.();
     }
