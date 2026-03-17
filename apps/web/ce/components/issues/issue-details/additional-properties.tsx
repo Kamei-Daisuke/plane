@@ -69,7 +69,6 @@ export const WorkItemAdditionalSidebarProperties: FC<TWorkItemAdditionalSidebarP
                 property={property}
                 value={values[property.id]}
                 onChange={(v) => handleChange(property.id, v)}
-                workspaceSlug={workspaceSlug}
                 projectId={projectId}
                 disabled={!isEditable}
               />

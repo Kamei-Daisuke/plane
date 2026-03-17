@@ -20,10 +20,10 @@ def allow_permission(allowed_roles, level="PROJECT", creator=False, model=None):
     def decorator(view_func):
         @wraps(view_func)
         def _wrapped_view(instance, request, *args, **kwargs):
+            # Only trust project_id from URL path or query params (not request body)
             project_id = (
                 kwargs.get("project_id")
                 or request.query_params.get("project_id")
-                or request.data.get("project_id")
             )
 
             # Check for creator if required

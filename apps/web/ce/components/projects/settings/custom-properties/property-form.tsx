@@ -6,19 +6,8 @@
 
 import { useState } from "react";
 import type { TIssuePropertyType, TIssueTypeProperty } from "@plane/types";
+import { useTranslation } from "@plane/i18n";
 import { Button } from "@plane/propel/button";
-
-const PROPERTY_TYPE_OPTIONS: { value: TIssuePropertyType; label: string }[] = [
-  { value: "text", label: "テキスト" },
-  { value: "number", label: "数値" },
-  { value: "date", label: "日付" },
-  { value: "boolean", label: "チェック" },
-  { value: "url", label: "URL" },
-  { value: "select", label: "単一選択" },
-  { value: "multi_select", label: "複数選択" },
-  { value: "member", label: "メンバー（単一）" },
-  { value: "multi_member", label: "メンバー（複数）" },
-];
 
 type Props = {
   initial?: Partial<TIssueTypeProperty>;
@@ -27,6 +16,20 @@ type Props = {
 };
 
 export function PropertyForm({ initial, onSubmit, onCancel }: Props) {
+  const { t } = useTranslation();
+
+  const PROPERTY_TYPE_OPTIONS: { value: TIssuePropertyType; label: string }[] = [
+    { value: "text", label: t("project_settings.custom_properties.type_text") },
+    { value: "number", label: t("project_settings.custom_properties.type_number") },
+    { value: "date", label: t("project_settings.custom_properties.type_date") },
+    { value: "boolean", label: t("project_settings.custom_properties.type_boolean") },
+    { value: "url", label: t("project_settings.custom_properties.type_url") },
+    { value: "select", label: t("project_settings.custom_properties.type_select") },
+    { value: "multi_select", label: t("project_settings.custom_properties.type_multi_select") },
+    { value: "member", label: t("project_settings.custom_properties.type_member") },
+    { value: "multi_member", label: t("project_settings.custom_properties.type_multi_member") },
+  ];
+
   const [displayName, setDisplayName] = useState(initial?.display_name ?? "");
   const [propertyType, setPropertyType] = useState<TIssuePropertyType>(initial?.property_type ?? "text");
   const [isRequired, setIsRequired] = useState(initial?.is_required ?? false);
@@ -36,7 +39,7 @@ export function PropertyForm({ initial, onSubmit, onCancel }: Props) {
 
   const handleSubmit = async () => {
     if (!displayName.trim()) {
-      setError("名前は必須です");
+      setError(t("project_settings.custom_properties.property_name_required"));
       return;
     }
     setError(null);
@@ -50,7 +53,7 @@ export function PropertyForm({ initial, onSubmit, onCancel }: Props) {
         is_active: isActive,
       });
     } catch {
-      setError("保存に失敗しました");
+      setError(t("project_settings.custom_properties.save_failed"));
     } finally {
       setSubmitting(false);
     }
@@ -60,14 +63,14 @@ export function PropertyForm({ initial, onSubmit, onCancel }: Props) {
     <div className="border-custom-border-200 bg-custom-background-90 flex flex-col gap-3 rounded border p-4">
       <div className="flex flex-col gap-1">
         <label htmlFor="prop-display-name" className="text-xs text-custom-text-300 font-medium">
-          プロパティ名 *
+          {t("project_settings.custom_properties.property_name")} *
         </label>
         <input
           id="prop-display-name"
           type="text"
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
-          placeholder="例: 優先度、担当部署"
+          placeholder={t("project_settings.custom_properties.property_name_placeholder")}
           className="border-custom-border-200 bg-custom-background-100 text-sm text-custom-text-100 focus:ring-custom-primary-100 rounded border px-3 py-1.5 focus:ring-1 focus:outline-none"
         />
         {error && <p className="text-xs text-red-500">{error}</p>}
@@ -75,7 +78,7 @@ export function PropertyForm({ initial, onSubmit, onCancel }: Props) {
 
       <div className="flex flex-col gap-1">
         <label htmlFor="prop-type" className="text-xs text-custom-text-300 font-medium">
-          型
+          {t("project_settings.custom_properties.property_type")}
         </label>
         <select
           id="prop-type"
@@ -90,7 +93,7 @@ export function PropertyForm({ initial, onSubmit, onCancel }: Props) {
             </option>
           ))}
         </select>
-        {initial?.id && <p className="text-xs text-custom-text-400">型は作成後に変更できません</p>}
+        {initial?.id && <p className="text-xs text-custom-text-400">{t("project_settings.custom_properties.type_not_changeable")}</p>}
       </div>
 
       <div className="flex items-center gap-4">
@@ -101,7 +104,7 @@ export function PropertyForm({ initial, onSubmit, onCancel }: Props) {
             onChange={(e) => setIsRequired(e.target.checked)}
             className="h-3.5 w-3.5 rounded"
           />
-          <span className="text-sm text-custom-text-200">必須</span>
+          <span className="text-sm text-custom-text-200">{t("project_settings.custom_properties.required")}</span>
         </label>
         <label className="flex cursor-pointer items-center gap-2">
           <input
@@ -110,16 +113,16 @@ export function PropertyForm({ initial, onSubmit, onCancel }: Props) {
             onChange={(e) => setIsActive(e.target.checked)}
             className="h-3.5 w-3.5 rounded"
           />
-          <span className="text-sm text-custom-text-200">有効</span>
+          <span className="text-sm text-custom-text-200">{t("project_settings.custom_properties.active")}</span>
         </label>
       </div>
 
       <div className="flex items-center gap-2">
         <Button variant="primary" size="sm" onClick={handleSubmit} loading={submitting}>
-          {initial?.id ? "更新" : "追加"}
+          {initial?.id ? t("project_settings.custom_properties.update") : t("project_settings.custom_properties.add")}
         </Button>
         <Button variant="neutral-primary" size="sm" onClick={onCancel}>
-          キャンセル
+          {t("project_settings.custom_properties.cancel")}
         </Button>
       </div>
     </div>

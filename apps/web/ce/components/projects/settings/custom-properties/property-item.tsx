@@ -8,19 +8,20 @@ import { useState } from "react";
 import { observer } from "mobx-react";
 import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import type { TIssueTypeProperty, TIssueTypePropertyOption } from "@plane/types";
+import { useTranslation } from "@plane/i18n";
 import { PropertyForm } from "./property-form";
 import { OptionForm } from "./option-form";
 
-const PROPERTY_TYPE_LABEL: Record<string, string> = {
-  text: "テキスト",
-  number: "数値",
-  date: "日付",
-  boolean: "チェック",
-  url: "URL",
-  select: "単一選択",
-  multi_select: "複数選択",
-  member: "メンバー（単一）",
-  multi_member: "メンバー（複数）",
+const PROPERTY_TYPE_I18N_KEY: Record<string, string> = {
+  text: "project_settings.custom_properties.type_text",
+  number: "project_settings.custom_properties.type_number",
+  date: "project_settings.custom_properties.type_date",
+  boolean: "project_settings.custom_properties.type_boolean",
+  url: "project_settings.custom_properties.type_url",
+  select: "project_settings.custom_properties.type_select",
+  multi_select: "project_settings.custom_properties.type_multi_select",
+  member: "project_settings.custom_properties.type_member",
+  multi_member: "project_settings.custom_properties.type_multi_member",
 };
 
 type Props = {
@@ -42,6 +43,7 @@ export const PropertyItem = observer(function PropertyItem({
   onUpdateOption,
   onDeleteOption,
 }: Props) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [addingOption, setAddingOption] = useState(false);
@@ -78,19 +80,19 @@ export const PropertyItem = observer(function PropertyItem({
         )}
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <span className="text-sm text-custom-text-100 truncate font-medium">{property.display_name}</span>
-          {property.is_required && <span className="text-xs text-red-500">必須</span>}
-          {!property.is_active && <span className="text-xs text-custom-text-400">無効</span>}
+          {property.is_required && <span className="text-xs text-red-500">{t("project_settings.custom_properties.required")}</span>}
+          {!property.is_active && <span className="text-xs text-custom-text-400">{t("project_settings.custom_properties.inactive")}</span>}
           <span className="text-xs text-custom-text-400 bg-custom-background-80 rounded px-1.5 py-0.5">
-            {PROPERTY_TYPE_LABEL[property.property_type] ?? property.property_type}
+            {PROPERTY_TYPE_I18N_KEY[property.property_type] ? t(PROPERTY_TYPE_I18N_KEY[property.property_type]) : property.property_type}
           </span>
-          {hasOptions && <span className="text-xs text-custom-text-400">{activeOptions.length} 選択肢</span>}
+          {hasOptions && <span className="text-xs text-custom-text-400">{t("project_settings.custom_properties.options_count", { count: activeOptions.length })}</span>}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
             onClick={() => setEditing(true)}
             className="text-custom-text-400 hover:text-custom-text-200 p-1"
-            title="編集"
+            title={t("project_settings.custom_properties.update")}
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>
@@ -104,14 +106,14 @@ export const PropertyItem = observer(function PropertyItem({
                 }}
                 className="bg-red-500 text-xs hover:bg-red-600 rounded px-2 py-0.5 text-white"
               >
-                削除
+                {t("project_settings.custom_properties.confirm_delete")}
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmDelete(false)}
                 className="text-xs text-custom-text-400 hover:text-custom-text-200"
               >
-                キャンセル
+                {t("project_settings.custom_properties.cancel")}
               </button>
             </div>
           ) : (
@@ -119,7 +121,7 @@ export const PropertyItem = observer(function PropertyItem({
               type="button"
               onClick={() => setConfirmDelete(true)}
               className="text-custom-text-400 hover:text-red-500 p-1"
-              title="削除"
+              title={t("project_settings.custom_properties.confirm_delete")}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -185,7 +187,7 @@ export const PropertyItem = observer(function PropertyItem({
               className="text-xs text-custom-primary-100 hover:text-custom-primary-200 flex items-center gap-1"
             >
               <Plus className="h-3.5 w-3.5" />
-              選択肢を追加
+              {t("project_settings.custom_properties.add_option")}
             </button>
           )}
         </div>
