@@ -41,10 +41,11 @@ export class IssuePropertyService extends APIService {
 
   async createProperty(
     workspaceSlug: string,
+    projectId: string,
     issueTypeId: string,
     data: Partial<TIssueTypeProperty>
   ): Promise<TIssueTypeProperty> {
-    return this.post(`/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/properties/`, data)
+    return this.post(`/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/properties/?project_id=${projectId}`, data)
       .then((r) => r?.data)
       .catch((e) => {
         throw e?.response?.data;
@@ -53,19 +54,25 @@ export class IssuePropertyService extends APIService {
 
   async updateProperty(
     workspaceSlug: string,
+    projectId: string,
     issueTypeId: string,
     propertyId: string,
     data: Partial<TIssueTypeProperty>
   ): Promise<TIssueTypeProperty> {
-    return this.patch(`/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/properties/${propertyId}/`, data)
+    return this.patch(
+      `/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/properties/${propertyId}/?project_id=${projectId}`,
+      data
+    )
       .then((r) => r?.data)
       .catch((e) => {
         throw e?.response?.data;
       });
   }
 
-  async deleteProperty(workspaceSlug: string, issueTypeId: string, propertyId: string): Promise<void> {
-    return this.delete(`/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/properties/${propertyId}/`)
+  async deleteProperty(workspaceSlug: string, projectId: string, issueTypeId: string, propertyId: string): Promise<void> {
+    return this.delete(
+      `/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/properties/${propertyId}/?project_id=${projectId}`
+    )
       .then((r) => r?.data)
       .catch((e) => {
         throw e?.response?.data;
@@ -88,12 +95,13 @@ export class IssuePropertyService extends APIService {
 
   async createOption(
     workspaceSlug: string,
+    projectId: string,
     issueTypeId: string,
     propertyId: string,
     data: Partial<TIssueTypePropertyOption>
   ): Promise<TIssueTypePropertyOption> {
     return this.post(
-      `/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/properties/${propertyId}/options/`,
+      `/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/properties/${propertyId}/options/?project_id=${projectId}`,
       data
     )
       .then((r) => r?.data)
@@ -104,13 +112,14 @@ export class IssuePropertyService extends APIService {
 
   async updateOption(
     workspaceSlug: string,
+    projectId: string,
     issueTypeId: string,
     propertyId: string,
     optionId: string,
     data: Partial<TIssueTypePropertyOption>
   ): Promise<TIssueTypePropertyOption> {
     return this.patch(
-      `/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/properties/${propertyId}/options/${optionId}/`,
+      `/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/properties/${propertyId}/options/${optionId}/?project_id=${projectId}`,
       data
     )
       .then((r) => r?.data)
@@ -119,9 +128,15 @@ export class IssuePropertyService extends APIService {
       });
   }
 
-  async deleteOption(workspaceSlug: string, issueTypeId: string, propertyId: string, optionId: string): Promise<void> {
+  async deleteOption(
+    workspaceSlug: string,
+    projectId: string,
+    issueTypeId: string,
+    propertyId: string,
+    optionId: string
+  ): Promise<void> {
     return this.delete(
-      `/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/properties/${propertyId}/options/${optionId}/`
+      `/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/properties/${propertyId}/options/${optionId}/?project_id=${projectId}`
     )
       .then((r) => r?.data)
       .catch((e) => {

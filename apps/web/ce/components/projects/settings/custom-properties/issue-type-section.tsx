@@ -15,9 +15,10 @@ import { PropertyItem } from "./property-item";
 type Props = {
   issueType: TIssueType;
   workspaceSlug: string;
+  projectId: string;
 };
 
-export const IssueTypeSection = observer(function IssueTypeSection({ issueType, workspaceSlug }: Props) {
+export const IssueTypeSection = observer(function IssueTypeSection({ issueType, workspaceSlug, projectId }: Props) {
   const {
     propertiesByIssueType,
     fetchProperties,
@@ -76,19 +77,19 @@ export const IssueTypeSection = observer(function IssueTypeSection({ issueType, 
             workspaceSlug={workspaceSlug}
             issueTypeId={issueType.id}
             onUpdate={async (propertyId, data) => {
-              await updateProperty(workspaceSlug, issueType.id, propertyId, data);
+              await updateProperty(workspaceSlug, projectId, issueType.id, propertyId, data);
             }}
             onDelete={async (propertyId) => {
-              await deleteProperty(workspaceSlug, issueType.id, propertyId);
+              await deleteProperty(workspaceSlug, projectId, issueType.id, propertyId);
             }}
             onCreateOption={async (propertyId, data) => {
-              await createOption(workspaceSlug, issueType.id, propertyId, data);
+              await createOption(workspaceSlug, projectId, issueType.id, propertyId, data);
             }}
             onUpdateOption={async (propertyId, optionId, data) => {
-              await updateOption(workspaceSlug, issueType.id, propertyId, optionId, data);
+              await updateOption(workspaceSlug, projectId, issueType.id, propertyId, optionId, data);
             }}
             onDeleteOption={async (propertyId, optionId) => {
-              await deleteOption(workspaceSlug, issueType.id, propertyId, optionId);
+              await deleteOption(workspaceSlug, projectId, issueType.id, propertyId, optionId);
             }}
           />
         ))}
@@ -97,7 +98,7 @@ export const IssueTypeSection = observer(function IssueTypeSection({ issueType, 
       {addingProperty && (
         <PropertyForm
           onSubmit={async (data) => {
-            await createProperty(workspaceSlug, issueType.id, data);
+            await createProperty(workspaceSlug, projectId, issueType.id, data);
             setAddingProperty(false);
           }}
           onCancel={() => setAddingProperty(false)}

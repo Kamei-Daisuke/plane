@@ -20,6 +20,12 @@ def allow_permission(allowed_roles, level="PROJECT", creator=False, model=None):
     def decorator(view_func):
         @wraps(view_func)
         def _wrapped_view(instance, request, *args, **kwargs):
+            project_id = (
+                kwargs.get("project_id")
+                or request.query_params.get("project_id")
+                or request.data.get("project_id")
+            )
+
             # Check for creator if required
             if creator and model:
                 obj = model.objects.filter(id=kwargs["pk"], created_by=request.user).exists()
@@ -39,10 +45,16 @@ def allow_permission(allowed_roles, level="PROJECT", creator=False, model=None):
                 ).exists():
                     return view_func(instance, request, *args, **kwargs)
             else:
+                if not project_id:
+                    return Response(
+                        {"error": "project_id is required for project-level permission checks."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
                 is_user_has_allowed_role = ProjectMember.objects.filter(
                     member=request.user,
                     workspace__slug=kwargs["slug"],
-                    project_id=kwargs["project_id"],
+                    project_id=project_id,
                     role__in=allowed_role_values,
                     is_active=True,
                 ).exists()
@@ -54,7 +66,7 @@ def allow_permission(allowed_roles, level="PROJECT", creator=False, model=None):
                     ProjectMember.objects.filter(
                         member=request.user,
                         workspace__slug=kwargs["slug"],
-                        project_id=kwargs["project_id"],
+                        project_id=project_id,
                         is_active=True,
                     ).exists()
                     and WorkspaceMember.objects.filter(
