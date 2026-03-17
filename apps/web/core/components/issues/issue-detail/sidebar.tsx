@@ -90,7 +90,7 @@ export const IssueDetailsSidebar = observer(function IssueDetailsSidebar(props: 
         <div className="h-full w-full overflow-y-auto px-6">
           <h5 className="mt-5 text-body-xs-medium">{t("common.properties")}</h5>
           <div className={`mt-4 mb-2 space-y-2.5 truncate ${!isEditable ? "opacity-60" : ""}`}>
-            <SidebarPropertyListItem icon={LayersIcon} label="Type">
+            <SidebarPropertyListItem icon={LayersIcon} label={t("common.type")}>
               <IssueTypeSelect
                 workspaceSlug={workspaceSlug}
                 projectId={projectId}

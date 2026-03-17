@@ -52,7 +52,6 @@ export const WorkItemModalAdditionalProperties = observer(function WorkItemModal
               property={property}
               value={issuePropertyValues[property.id]}
               onChange={(v) => setIssuePropertyValues((prev) => ({ ...prev, [property.id]: v }))}
-              workspaceSlug={workspaceSlug}
               projectId={projectId}
               error={issuePropertyValueErrors[property.id]}
             />

@@ -84,7 +84,7 @@ export const PeekOverviewProperties = observer(function PeekOverviewProperties(p
     <div>
       <h6 className="text-body-xs-medium">{t("common.properties")}</h6>
       <div className={`mt-3 w-full space-y-3 ${disabled ? "opacity-60" : ""}`}>
-        <SidebarPropertyListItem icon={LayersIcon} label="Type">
+        <SidebarPropertyListItem icon={LayersIcon} label={t("common.type")}>
           <IssueTypeSelect
             workspaceSlug={workspaceSlug}
             projectId={projectId}
