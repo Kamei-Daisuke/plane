@@ -155,6 +155,7 @@ export function PropertyField({
             placeholder="Select member"
             buttonVariant="border-with-text"
             buttonClassName="text-sm"
+            showUserDetails
           />
         );
 
@@ -169,6 +170,7 @@ export function PropertyField({
             placeholder="Select members"
             buttonVariant="border-with-text"
             buttonClassName="text-sm"
+            showUserDetails
           />
         );
 
