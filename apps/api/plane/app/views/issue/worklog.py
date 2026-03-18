@@ -3,7 +3,6 @@
 # See the LICENSE file for details.
 
 from django.db.models import Sum
-from django.utils import timezone
 
 from rest_framework import status
 from rest_framework.response import Response
@@ -95,6 +94,5 @@ class IssueWorklogViewSet(BaseViewSet):
         is_admin = _is_project_admin(request, project_id)
         if not (is_owner or is_admin):
             return Response({"error": "You can only delete your own worklogs"}, status=status.HTTP_403_FORBIDDEN)
-        instance.deleted_at = timezone.now()
-        instance.save(update_fields=["deleted_at"])
+        instance.delete(soft=True)
         return Response(status=status.HTTP_204_NO_CONTENT)
