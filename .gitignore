@@ -2,6 +2,10 @@ node_modules
 .next
 .yarn
 
+# Development notes (not for production)
+PROGRESS.md
+README_KEIS.md
+
 ### NextJS ###
 # Dependencies
 /node_modules

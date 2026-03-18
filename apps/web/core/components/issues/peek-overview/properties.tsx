@@ -20,6 +20,7 @@ import {
   UserCirclePropertyIcon,
   EstimatePropertyIcon,
   ParentPropertyIcon,
+  LayersIcon,
 } from "@plane/propel/icons";
 import { cn, getDate, renderFormattedPayloadDate, shouldHighlightIssueDueDate } from "@plane/utils";
 // components
@@ -37,6 +38,7 @@ import { useProject } from "@/hooks/store/use-project";
 import { useProjectState } from "@/hooks/store/use-project-state";
 // plane web components
 import { WorkItemAdditionalSidebarProperties } from "@/plane-web/components/issues/issue-details/additional-properties";
+import { IssueTypeSelect } from "@/plane-web/components/issues/issue-details/issue-type-select";
 import { IssueParentSelectRoot } from "@/plane-web/components/issues/issue-details/parent-select-root";
 import { DateAlert } from "@/plane-web/components/issues/issue-details/sidebar/date-alert";
 import { TransferHopInfo } from "@/plane-web/components/issues/issue-details/sidebar/transfer-hop-info";
@@ -82,6 +84,16 @@ export const PeekOverviewProperties = observer(function PeekOverviewProperties(p
     <div>
       <h6 className="text-body-xs-medium">{t("common.properties")}</h6>
       <div className={`mt-3 w-full space-y-3 ${disabled ? "opacity-60" : ""}`}>
+        <SidebarPropertyListItem icon={LayersIcon} label={t("common.type")}>
+          <IssueTypeSelect
+            workspaceSlug={workspaceSlug}
+            projectId={projectId}
+            value={issue.type_id}
+            disabled={disabled}
+            onChange={(val) => issueOperations.update(workspaceSlug, projectId, issueId, { type_id: val })}
+          />
+        </SidebarPropertyListItem>
+
         <SidebarPropertyListItem icon={StatePropertyIcon} label={t("common.state")}>
           <StateDropdown
             value={issue?.state_id}

@@ -9,6 +9,7 @@ import React, { useEffect } from "react";
 import { observer } from "mobx-react";
 // hooks
 import { useIssueProperty } from "@/hooks/store/use-issue-property";
+import { useMember } from "@/hooks/store/use-member";
 // components
 import { PropertyField } from "../issue-properties/property-field";
 
@@ -26,6 +27,9 @@ export const WorkItemAdditionalSidebarProperties: FC<TWorkItemAdditionalSidebarP
     const { workItemId, workItemTypeId, projectId, workspaceSlug, isEditable } = props;
     const { propertiesByIssueType, valuesByIssue, fetchProperties, fetchPropertyValues, upsertPropertyValues } =
       useIssueProperty();
+    const {
+      project: { fetchProjectMembers },
+    } = useMember();
 
     const properties = workItemTypeId ? (propertiesByIssueType[workItemTypeId] ?? []) : [];
     const activeProperties = properties.filter((p) => p.is_active);
@@ -37,6 +41,13 @@ export const WorkItemAdditionalSidebarProperties: FC<TWorkItemAdditionalSidebarP
       }
       fetchPropertyValues(workspaceSlug, projectId, workItemId);
     }, [workItemTypeId, workItemId, projectId, workspaceSlug, fetchProperties, fetchPropertyValues]);
+
+    useEffect(() => {
+      if (!workspaceSlug || !projectId) return;
+      if (!activeProperties.some((property) => property.property_type === "member" || property.property_type === "multi_member"))
+        return;
+      fetchProjectMembers(workspaceSlug, projectId);
+    }, [workspaceSlug, projectId, activeProperties, fetchProjectMembers]);
 
     if (!workItemTypeId || activeProperties.length === 0) return <></>;
 
@@ -58,7 +69,6 @@ export const WorkItemAdditionalSidebarProperties: FC<TWorkItemAdditionalSidebarP
                 property={property}
                 value={values[property.id]}
                 onChange={(v) => handleChange(property.id, v)}
-                workspaceSlug={workspaceSlug}
                 projectId={projectId}
                 disabled={!isEditable}
               />
