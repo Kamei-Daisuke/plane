@@ -20,6 +20,7 @@ from .workspace import WorkspaceLiteSerializer
 from plane.db.models import (
     User,
     Issue,
+    IssueType,
     IssueActivity,
     IssueComment,
     ProjectUserProperty,
@@ -81,6 +82,9 @@ class IssueProjectLiteSerializer(BaseSerializer):
 ## Find a better approach to save manytomany?
 class IssueCreateSerializer(BaseSerializer):
     # ids
+    type_id = serializers.PrimaryKeyRelatedField(
+        source="type", queryset=IssueType.objects.all(), required=False, allow_null=True
+    )
     state_id = serializers.PrimaryKeyRelatedField(
         source="state", queryset=State.all_state_objects.all(), required=False, allow_null=True
     )
@@ -193,6 +197,13 @@ class IssueCreateSerializer(BaseSerializer):
         ):
             raise serializers.ValidationError("Estimate point is not valid please pass a valid estimate_point_id")
 
+        if attrs.get("type") and not IssueType.objects.filter(
+            id=attrs["type"].id,
+            project_issue_types__project_id=self.context.get("project_id"),
+            is_active=True,
+        ).exists():
+            raise serializers.ValidationError("Issue type is not valid please pass a valid type_id")
+
         return attrs
 
     def create(self, validated_data):
@@ -202,6 +213,13 @@ class IssueCreateSerializer(BaseSerializer):
         project_id = self.context["project_id"]
         workspace_id = self.context["workspace_id"]
         default_assignee_id = self.context["default_assignee_id"]
+
+        if "type" not in validated_data or validated_data["type"] is None:
+            validated_data["type"] = (
+                IssueType.objects.filter(project_issue_types__project_id=project_id, is_default=True, is_active=True)
+                .order_by("name")
+                .first()
+            )
 
         # Create Issue
         issue = Issue.objects.create(**validated_data, project_id=project_id)
@@ -759,6 +777,7 @@ class IssueIntakeSerializer(DynamicBaseSerializer):
 
 class IssueSerializer(DynamicBaseSerializer):
     # ids
+    type_id = serializers.PrimaryKeyRelatedField(source="type", read_only=True)
     cycle_id = serializers.PrimaryKeyRelatedField(read_only=True)
     module_ids = serializers.ListField(child=serializers.UUIDField(), required=False)
 
@@ -786,6 +805,7 @@ class IssueSerializer(DynamicBaseSerializer):
             "sequence_id",
             "project_id",
             "parent_id",
+            "type_id",
             "cycle_id",
             "module_ids",
             "label_ids",
@@ -843,6 +863,7 @@ class IssueListDetailSerializer(serializers.Serializer):
             "sequence_id": instance.sequence_id,
             "project_id": instance.project_id,
             "parent_id": instance.parent_id,
+            "type_id": instance.type_id,
             "created_at": instance.created_at,
             "updated_at": instance.updated_at,
             "created_by": instance.created_by_id,

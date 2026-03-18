@@ -471,6 +471,18 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
     // The Issue list is added to the main Issue Map
     this.rootIssueStore.issues.addIssue(issueList);
 
+    if (projectId && issueList.length > 0) {
+      const issueTypeIds = uniq(issueList.map((issue) => issue.type_id).filter(Boolean));
+      issueTypeIds.forEach((issueTypeId) => {
+        void this.rootIssueStore.rootStore.issuePropertyStore.fetchProperties(workspaceSlug, issueTypeId as string);
+      });
+      void this.rootIssueStore.rootStore.issuePropertyStore.fetchBulkPropertyValues(
+        workspaceSlug,
+        projectId,
+        issueList.map((issue) => issue.id)
+      );
+    }
+
     // Update all the GroupIds to this Store's groupedIssueIds and update Individual group issue counts
     runInAction(() => {
       this.clear(shouldClearPaginationOptions);
@@ -501,6 +513,21 @@ export abstract class BaseIssuesStore implements IBaseIssuesStore {
 
     // The Issue list is added to the main Issue Map
     this.rootIssueStore.issues.addIssue(issueList);
+
+    if (this.rootIssueStore.projectId && issueList.length > 0) {
+      const issueTypeIds = uniq(issueList.map((issue) => issue.type_id).filter(Boolean));
+      issueTypeIds.forEach((issueTypeId) => {
+        void this.rootIssueStore.rootStore.issuePropertyStore.fetchProperties(
+          this.rootIssueStore.workspaceSlug ?? "",
+          issueTypeId as string
+        );
+      });
+      void this.rootIssueStore.rootStore.issuePropertyStore.fetchBulkPropertyValues(
+        this.rootIssueStore.workspaceSlug ?? "",
+        this.rootIssueStore.projectId,
+        issueList.map((issue) => issue.id)
+      );
+    }
 
     // Update all the GroupIds to this Store's groupedIssueIds and update Individual group issue counts
     runInAction(() => {

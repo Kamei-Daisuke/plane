@@ -5,12 +5,13 @@
  */
 
 import type { FC } from "react";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
 import type { IIssueDisplayProperties, TIssue } from "@plane/types";
 // hooks
 import { useIssueProperty } from "@/hooks/store/use-issue-property";
+import { useMember } from "@/hooks/store/use-member";
 
 export type TWorkItemLayoutAdditionalProperties = {
   displayProperties: IIssueDisplayProperties;
@@ -19,23 +20,32 @@ export type TWorkItemLayoutAdditionalProperties = {
 
 export const WorkItemLayoutAdditionalProperties: FC<TWorkItemLayoutAdditionalProperties> = observer(
   function WorkItemLayoutAdditionalProperties({ issue }) {
-    const { propertiesByIssueType, valuesByIssue, fetchPropertyValues } = useIssueProperty();
+    const { propertiesByIssueType, valuesByIssue, fetchProperties, fetchPropertyValues } = useIssueProperty();
+    const {
+      getUserDetails,
+      project: { fetchProjectMembers },
+    } = useMember();
     const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
     const typeId = issue.type_id;
     const projectId = issue.project_id;
-
-    const fetchedRef = useRef(false);
     useEffect(() => {
       if (!workspaceSlug || !projectId || !issue.id) return;
-      if (fetchedRef.current) return;
-      fetchedRef.current = true;
+      if (typeId) {
+        fetchProperties(workspaceSlug, typeId);
+      }
       fetchPropertyValues(workspaceSlug, projectId, issue.id);
-    }, [workspaceSlug, projectId, issue.id, fetchPropertyValues]);
+    }, [workspaceSlug, projectId, issue.id, typeId, fetchProperties, fetchPropertyValues]);
+    const properties = typeId ? (propertiesByIssueType[typeId] ?? []).filter((p) => p.is_active) : [];
+    const values = projectId ? (valuesByIssue[`${projectId}:${issue.id}`] ?? {}) : {};
+
+    useEffect(() => {
+      if (!workspaceSlug || !projectId) return;
+      if (!properties.some((property) => property.property_type === "member" || property.property_type === "multi_member"))
+        return;
+      fetchProjectMembers(workspaceSlug, projectId);
+    }, [workspaceSlug, projectId, properties, fetchProjectMembers]);
 
     if (!typeId || !projectId) return <></>;
-
-    const properties = (propertiesByIssueType[typeId] ?? []).filter((p) => p.is_active);
-    const values = valuesByIssue[`${projectId}:${issue.id}`] ?? {};
 
     if (properties.length === 0) return <></>;
 
@@ -60,6 +70,17 @@ export const WorkItemLayoutAdditionalProperties: FC<TWorkItemLayoutAdditionalPro
               displayVal = ids.map((id) => property.options.find((o) => o.id === id)?.name ?? id).join(", ");
               break;
             }
+            case "member":
+              displayVal = getUserDetails(String(val))?.display_name ?? String(val);
+              break;
+            case "multi_member": {
+              const ids = Array.isArray(val) ? (val as string[]) : [];
+              displayVal = ids.map((id) => getUserDetails(id)?.display_name ?? id).join(", ");
+              break;
+            }
+            case "date":
+              displayVal = String(val).slice(0, 10);
+              break;
             default:
               displayVal = String(val);
           }

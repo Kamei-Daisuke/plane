@@ -2,6 +2,12 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+# Standard library imports
+import uuid as uuid_mod
+
+# Django imports
+from django.db import transaction
+
 # Third Party imports
 from rest_framework import status
 from rest_framework.response import Response
@@ -40,7 +46,7 @@ class ProjectIssueTypeListView(BaseAPIView):
     URL: workspaces/<slug>/projects/<project_id>/issue-types/
     """
 
-    permission_classes = [WorkSpaceBasePermission]
+    permission_classes = [ProjectBasePermission]
 
     def get(self, request, slug, project_id):
         issue_type_ids = ProjectIssueType.objects.filter(
@@ -196,9 +202,20 @@ class ProjectPropertyValuesBulkEndpoint(BaseAPIView):
 
     def get(self, request, slug, project_id):
         raw = request.query_params.get("issue_ids", "")
-        issue_ids = [i.strip() for i in raw.split(",") if i.strip()]
-        if not issue_ids:
+        raw_ids = [i.strip() for i in raw.split(",") if i.strip()]
+        if not raw_ids:
             return Response({})
+
+        # Validate that all IDs are valid UUIDs
+        issue_ids = []
+        for raw_id in raw_ids:
+            try:
+                issue_ids.append(str(uuid_mod.UUID(raw_id)))
+            except ValueError:
+                return Response(
+                    {"error": f"Invalid UUID: {raw_id}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         values = (
             IssuePropertyValue.objects.filter(
@@ -267,13 +284,14 @@ class IssuePropertyValueEndpoint(BaseAPIView):
                 )
 
         upserted = []
-        for property_id, value in values.items():
-            obj, _ = IssuePropertyValue.objects.update_or_create(
-                issue=issue,
-                property_id=property_id,
-                defaults={"value": value, "updated_by": request.user},
-            )
-            upserted.append(obj)
+        with transaction.atomic():
+            for property_id, value in values.items():
+                obj, _ = IssuePropertyValue.objects.update_or_create(
+                    issue=issue,
+                    property_id=property_id,
+                    defaults={"value": value, "updated_by": request.user},
+                )
+                upserted.append(obj)
 
         result = {str(v.property_id): v.value for v in upserted}
         return Response(result, status=status.HTTP_200_OK)

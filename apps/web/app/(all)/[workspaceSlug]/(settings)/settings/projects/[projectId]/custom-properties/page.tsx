@@ -6,6 +6,7 @@
 
 import { observer } from "mobx-react";
 import { EUserPermissions, EUserPermissionsLevel } from "@plane/constants";
+import { useTranslation } from "@plane/i18n";
 import { NotAuthorizedView } from "@/components/auth-screens/not-authorized-view";
 import { PageHead } from "@/components/core/page-title";
 import { SettingsContentWrapper } from "@/components/settings/content-wrapper";
@@ -15,10 +16,11 @@ import { useUserPermissions } from "@/hooks/store/user";
 import { CustomPropertiesProjectSettingsHeader } from "./header";
 
 function CustomPropertiesSettingsPage() {
+  const { t } = useTranslation();
   const { currentProjectDetails } = useProject();
   const { workspaceUserInfo, allowPermissions } = useUserPermissions();
 
-  const pageTitle = currentProjectDetails?.name ? `${currentProjectDetails.name} - カスタムプロパティ` : undefined;
+  const pageTitle = currentProjectDetails?.name ? `${currentProjectDetails.name} - ${t("project_settings.custom_properties.heading")}` : undefined;
 
   const canPerformActions = allowPermissions([EUserPermissions.ADMIN], EUserPermissionsLevel.PROJECT);
 
