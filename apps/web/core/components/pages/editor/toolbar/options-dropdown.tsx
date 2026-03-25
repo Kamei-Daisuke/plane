@@ -9,8 +9,7 @@ import { observer } from "mobx-react";
 import { ArrowUpToLine, Clipboard, History } from "lucide-react";
 // plane imports
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
-import { ToggleSwitch } from "@plane/ui";
-import { copyTextToClipboard } from "@plane/utils";
+import { cn } from "@plane/utils";
 // hooks
 import { useAppRouter } from "@/hooks/use-app-router";
 import { usePageFilters } from "@/hooks/use-page-filters";
@@ -29,6 +28,23 @@ type Props = {
   page: TPageInstance;
   storeType: EPageStoreType;
 };
+
+const MenuToggleIndicator = ({ checked }: { checked: boolean }) => (
+  <span
+    aria-hidden="true"
+    className={cn(
+      "relative inline-flex h-4 w-7 flex-shrink-0 rounded-full border border-subtle transition-colors",
+      checked ? "bg-accent-primary" : "bg-(--text-color-icon-placeholder)"
+    )}
+  >
+    <span
+      className={cn(
+        "absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-(--text-color-icon-on-color) transition-transform",
+        checked ? "translate-x-3.5" : "translate-x-0.5"
+      )}
+    />
+  </span>
+);
 
 export const PageOptionsDropdown = observer(function PageOptionsDropdown(props: Props) {
   const { page, storeType } = props;
@@ -56,7 +72,7 @@ export const PageOptionsDropdown = observer(function PageOptionsDropdown(props: 
           customContent: (
             <>
               Full width
-              <ToggleSwitch value={isFullWidth} onChange={() => {}} />
+              <MenuToggleIndicator checked={isFullWidth} />
             </>
           ),
           className: "flex items-center justify-between gap-2",
@@ -67,7 +83,7 @@ export const PageOptionsDropdown = observer(function PageOptionsDropdown(props: 
           customContent: (
             <>
               Sticky toolbar
-              <ToggleSwitch value={isStickyToolbarEnabled} onChange={() => {}} />
+              <MenuToggleIndicator checked={isStickyToolbarEnabled} />
             </>
           ),
           className: "flex items-center justify-between gap-2",
