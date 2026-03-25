@@ -4,6 +4,19 @@ on:
   push:
     branches:
       - keis
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "screenshot/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/instructions/**"
+      - ".github/pull_request_template.md"
+      - ".github/dependabot.yml"
+      - "LICENSE.txt"
+      - "COPYRIGHT*.txt"
+      - "CODE_OF_CONDUCT.md"
+      - "CODEOWNERS"
+      - "SECURITY.md"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
