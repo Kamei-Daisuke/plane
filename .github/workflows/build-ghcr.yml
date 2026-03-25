@@ -24,11 +24,21 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_OWNER: ${{ github.repository_owner }}
 
 jobs:
+  setup:
+    name: Setup
+    runs-on: ubuntu-22.04
+    outputs:
+      image_owner: ${{ steps.lower.outputs.owner }}
+    steps:
+      - id: lower
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+
   build-web:
     name: Build Web
+    needs: [setup]
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -46,12 +56,13 @@ jobs:
           context: .
           file: ./apps/web/Dockerfile.web
           push: true
-          tags: ghcr.io/${{ env.IMAGE_OWNER }}/plane-frontend:${{ github.ref_name }}
+          tags: ghcr.io/${{ needs.setup.outputs.image_owner }}/plane-frontend:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   build-admin:
     name: Build Admin
+    needs: [setup]
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -69,12 +80,13 @@ jobs:
           context: .
           file: ./apps/admin/Dockerfile.admin
           push: true
-          tags: ghcr.io/${{ env.IMAGE_OWNER }}/plane-admin:${{ github.ref_name }}
+          tags: ghcr.io/${{ needs.setup.outputs.image_owner }}/plane-admin:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   build-api:
     name: Build API
+    needs: [setup]
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -92,12 +104,13 @@ jobs:
           context: ./apps/api
           file: ./apps/api/Dockerfile.api
           push: true
-          tags: ghcr.io/${{ env.IMAGE_OWNER }}/plane-backend:${{ github.ref_name }}
+          tags: ghcr.io/${{ needs.setup.outputs.image_owner }}/plane-backend:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   build-proxy:
     name: Build Proxy
+    needs: [setup]
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -115,12 +128,13 @@ jobs:
           context: ./apps/proxy
           file: ./apps/proxy/Dockerfile.ce
           push: true
-          tags: ghcr.io/${{ env.IMAGE_OWNER }}/plane-proxy:${{ github.ref_name }}
+          tags: ghcr.io/${{ needs.setup.outputs.image_owner }}/plane-proxy:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   build-space:
     name: Build Space
+    needs: [setup]
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -138,12 +152,13 @@ jobs:
           context: .
           file: ./apps/space/Dockerfile.space
           push: true
-          tags: ghcr.io/${{ env.IMAGE_OWNER }}/plane-space:${{ github.ref_name }}
+          tags: ghcr.io/${{ needs.setup.outputs.image_owner }}/plane-space:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   build-live:
     name: Build Live
+    needs: [setup]
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -161,6 +176,6 @@ jobs:
           context: .
           file: ./apps/live/Dockerfile.live
           push: true
-          tags: ghcr.io/${{ env.IMAGE_OWNER }}/plane-live:${{ github.ref_name }}
+          tags: ghcr.io/${{ needs.setup.outputs.image_owner }}/plane-live:${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
