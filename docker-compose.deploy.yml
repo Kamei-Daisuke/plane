@@ -87,8 +87,14 @@ services:
       CERT_ACME_CA: ${CERT_ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}
       CERT_ACME_DNS: ${CERT_ACME_DNS:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-0.0.0.0/0}
-    mem_limit: 16m
-    mem_reservation: 8m
+      ROUTE53_AWS_REGION: ${AWS_REGION:-ap-northeast-1}
+      ROUTE53_ACCESS_KEY_ID: ${PROXY_AWS_ACCESS_KEY_ID:-}
+      ROUTE53_SECRET_ACCESS_KEY: ${PROXY_AWS_SECRET_ACCESS_KEY:-}
+      ROUTE53_HOSTED_ZONE_ID: ${ROUTE53_HOSTED_ZONE_ID:-}
+    volumes:
+      - caddy_data:/data
+    mem_limit: 32m
+    mem_reservation: 16m
     depends_on:
       - web
       - api
@@ -155,3 +161,4 @@ volumes:
   redisdata:
   uploads:
   rabbitmq_data:
+  caddy_data:
