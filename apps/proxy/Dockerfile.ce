@@ -1,9 +1,11 @@
-FROM caddy:2.10.0-builder-alpine AS caddy-builder
+FROM golang:1.25-alpine AS caddy-builder
 
+RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
 RUN xcaddy build \
+        --output /usr/bin/caddy \
         --with github.com/caddy-dns/cloudflare@v0.2.1 \
         --with github.com/caddy-dns/digitalocean@04bde2867106aa1b44c2f9da41a285fa02e629c5 \
-        --with github.com/mholt/caddy-l4@4d3c80e89c5f80438a3e048a410d5543ff5fb9f4
+        --with github.com/caddy-dns/route53@v1.6.0
 
 FROM caddy:2.10.0-alpine
 

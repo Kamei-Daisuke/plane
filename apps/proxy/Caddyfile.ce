@@ -1,7 +1,5 @@
 {
-	{$CERT_EMAIL}
 	acme_ca {$CERT_ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
-	{$CERT_ACME_DNS}
 	servers {
 		max_header_size 25MB
 		client_ip_headers X-Forwarded-For X-Real-IP
@@ -32,5 +30,13 @@
 }
 
 {$SITE_ADDRESS} {
+	tls {$CERT_EMAIL} {
+		dns route53 {
+			region {$ROUTE53_AWS_REGION:ap-northeast-1}
+			access_key_id {$ROUTE53_ACCESS_KEY_ID}
+			secret_access_key {$ROUTE53_SECRET_ACCESS_KEY}
+			hosted_zone_id {$ROUTE53_HOSTED_ZONE_ID}
+		}
+	}
 	import plane_proxy
 }
