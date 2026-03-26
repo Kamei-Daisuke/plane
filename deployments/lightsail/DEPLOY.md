@@ -305,7 +305,7 @@ API コンテナ (gunicorn + celery worker)
 | サービス | mem_limit | 備考 |
 |---|---|---|
 | API + Worker | 384m | gunicorn 1 worker + celery solo pool |
-| Migrator | 128m | 起動時のみ |
+| Migrator | 256m | 起動時のみ（完了後メモリ解放） |
 | DB (PostgreSQL) | 64m | shared_buffers=32MB |
 | Web | 32m | nginx 静的配信 |
 | Admin | 32m | 初期設定後は停止可 |
