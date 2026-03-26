@@ -55,7 +55,7 @@ services:
     command: ./bin/docker-entrypoint-migrator.sh
     env_file:
       - ./apps/api/.env
-    mem_limit: 128m
+    mem_limit: 256m
     mem_reservation: 64m
     depends_on:
       - plane-db
