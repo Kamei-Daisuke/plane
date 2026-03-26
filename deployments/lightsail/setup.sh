@@ -13,11 +13,47 @@ set -euo pipefail
 
 PLANE_DIR="$HOME/plane"
 REPO_RAW="https://raw.githubusercontent.com/Kamei-Daisuke/plane/keis"
+SECRETS_URL="https://raw.githubusercontent.com/Kamei-Daisuke/plane-ops/main/secrets.env"
+SECRETS_FILE=""
 
 echo "============================================"
 echo "  Plane — Lightsail Setup"
 echo "============================================"
 echo ""
+
+# ----- Try to fetch secrets from private repo -----
+try_fetch_secrets() {
+  echo "[*] Checking for secrets in plane-ops (private repo)..."
+
+  # Try with gh CLI token
+  local token=""
+  if command -v gh &>/dev/null; then
+    token=$(gh auth token 2>/dev/null || true)
+  fi
+
+  # Try with GITHUB_TOKEN env var
+  if [ -z "$token" ] && [ -n "${GITHUB_TOKEN:-}" ]; then
+    token="$GITHUB_TOKEN"
+  fi
+
+  if [ -n "$token" ]; then
+    local tmpfile
+    tmpfile=$(mktemp)
+    if curl -fsSL -H "Authorization: token $token" "$SECRETS_URL" -o "$tmpfile" 2>/dev/null; then
+      SECRETS_FILE="$tmpfile"
+      # shellcheck disable=SC1090
+      source "$SECRETS_FILE"
+      echo "[OK] Secrets loaded from plane-ops. Interactive prompts will be skipped."
+      return 0
+    fi
+    rm -f "$tmpfile"
+  fi
+
+  echo "[!] Could not fetch secrets (no access to plane-ops). Will prompt for values."
+  return 1
+}
+
+try_fetch_secrets || true
 
 # ----- Detect OS & install Docker -----
 install_docker() {
@@ -120,14 +156,23 @@ generate_secrets() {
 configure_s3() {
   echo ""
   echo "=== S3 Configuration ==="
-  echo "Plane uses S3 for file storage. You need an IAM user with S3 access."
-  echo ""
-  read -rp "AWS S3 Access Key ID: " s3_key
-  read -rsp "AWS S3 Secret Access Key: " s3_secret
-  echo ""
-  read -rp "S3 Bucket Name [plane-keis-uploads]: " s3_bucket
+
+  local s3_key="${S3_ACCESS_KEY_ID:-}"
+  local s3_secret="${S3_SECRET_ACCESS_KEY:-}"
+  local s3_bucket="${S3_BUCKET_NAME:-}"
+  local aws_region="${S3_REGION:-}"
+
+  if [ -z "$s3_key" ]; then
+    echo "Plane uses S3 for file storage. You need an IAM user with S3 access."
+    echo ""
+    read -rp "AWS S3 Access Key ID: " s3_key
+    read -rsp "AWS S3 Secret Access Key: " s3_secret
+    echo ""
+    read -rp "S3 Bucket Name [plane-keis-uploads]: " s3_bucket
+    read -rp "AWS Region [ap-northeast-1]: " aws_region
+  fi
+
   s3_bucket="${s3_bucket:-plane-keis-uploads}"
-  read -rp "AWS Region [ap-northeast-1]: " aws_region
   aws_region="${aws_region:-ap-northeast-1}"
 
   sed -i "s|AWS_ACCESS_KEY_ID=$|AWS_ACCESS_KEY_ID=$s3_key|g"           "$PLANE_DIR/apps/api/.env"
@@ -141,7 +186,13 @@ configure_s3() {
 configure_urls() {
   echo ""
   echo "=== Domain / URL Configuration ==="
-  read -rp "Enter your domain or public IP (e.g. plane.example.com or 1.2.3.4): " site_addr
+
+  local site_addr="${SITE_DOMAIN:-}"
+  local cert_email="${CERT_EMAIL:-}"
+
+  if [ -z "$site_addr" ]; then
+    read -rp "Enter your domain or public IP (e.g. plane.example.com or 1.2.3.4): " site_addr
+  fi
 
   if [ -z "$site_addr" ]; then
     echo "[!] No address provided. Using :80 (HTTP on all interfaces)"
@@ -155,20 +206,28 @@ configure_urls() {
     sed -i "s|SITE_ADDRESS=:80|SITE_ADDRESS=$site_addr|g" "$PLANE_DIR/.env"
     base_url="https://$site_addr"
 
-    read -rp "Email for Let's Encrypt certificate: " cert_email
+    if [ -z "$cert_email" ]; then
+      read -rp "Email for Let's Encrypt certificate: " cert_email
+    fi
     if [ -n "$cert_email" ]; then
       echo "CERT_EMAIL=$cert_email" >> "$PLANE_DIR/.env"
     fi
 
-    echo ""
-    echo "=== Route53 DNS Challenge (for HTTPS) ==="
-    echo "Required for automatic HTTPS without opening ports to the internet."
-    echo "Use a dedicated IAM user with Route53 ChangeResourceRecordSets permission."
-    echo ""
-    read -rp "Route53 AWS Access Key ID: " r53_key
-    read -rsp "Route53 AWS Secret Access Key: " r53_secret
-    echo ""
-    read -rp "Route53 Hosted Zone ID: " r53_zone
+    local r53_key="${R53_ACCESS_KEY_ID:-}"
+    local r53_secret="${R53_SECRET_ACCESS_KEY:-}"
+    local r53_zone="${R53_HOSTED_ZONE_ID:-}"
+
+    if [ -z "$r53_key" ]; then
+      echo ""
+      echo "=== Route53 DNS Challenge (for HTTPS) ==="
+      echo "Required for automatic HTTPS without opening ports to the internet."
+      echo "Use a dedicated IAM user with Route53 ChangeResourceRecordSets permission."
+      echo ""
+      read -rp "Route53 AWS Access Key ID: " r53_key
+      read -rsp "Route53 AWS Secret Access Key: " r53_secret
+      echo ""
+      read -rp "Route53 Hosted Zone ID: " r53_zone
+    fi
 
     echo "PROXY_AWS_ACCESS_KEY_ID=$r53_key"       >> "$PLANE_DIR/.env"
     echo "PROXY_AWS_SECRET_ACCESS_KEY=$r53_secret" >> "$PLANE_DIR/.env"
@@ -238,14 +297,28 @@ CADDYEOF
 login_ghcr() {
   echo ""
   echo "=== GitHub Container Registry ==="
-  echo "Create a PAT at: https://github.com/settings/tokens"
-  echo "  -> Scope: read:packages"
-  echo ""
-  read -rp "GitHub username [Kamei-Daisuke]: " gh_user
-  gh_user="${gh_user:-Kamei-Daisuke}"
-  read -rsp "GitHub PAT: " gh_pat
-  echo ""
 
+  local gh_user="${GHCR_USER:-}"
+  local gh_pat=""
+
+  # Try gh CLI token first
+  if command -v gh &>/dev/null; then
+    gh_pat=$(gh auth token 2>/dev/null || true)
+  fi
+  if [ -z "$gh_pat" ] && [ -n "${GITHUB_TOKEN:-}" ]; then
+    gh_pat="$GITHUB_TOKEN"
+  fi
+
+  if [ -z "$gh_pat" ]; then
+    echo "Create a PAT at: https://github.com/settings/tokens"
+    echo "  -> Scope: read:packages"
+    echo ""
+    read -rp "GitHub username [Kamei-Daisuke]: " gh_user
+    read -rsp "GitHub PAT: " gh_pat
+    echo ""
+  fi
+
+  gh_user="${gh_user:-Kamei-Daisuke}"
   echo "$gh_pat" | docker login ghcr.io -u "$gh_user" --password-stdin
   echo "[OK] Logged in to ghcr.io"
 }
