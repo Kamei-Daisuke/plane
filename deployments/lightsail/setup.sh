@@ -13,47 +13,42 @@ set -euo pipefail
 
 PLANE_DIR="$HOME/plane"
 REPO_RAW="https://raw.githubusercontent.com/Kamei-Daisuke/plane/keis"
-SECRETS_URL="https://raw.githubusercontent.com/Kamei-Daisuke/plane-ops/main/secrets.env"
-SECRETS_FILE=""
+SSM_PREFIX="/plane"
+AWS_REGION="ap-northeast-1"
 
 echo "============================================"
 echo "  Plane — Lightsail Setup"
 echo "============================================"
 echo ""
 
-# ----- Try to fetch secrets from private repo -----
-try_fetch_secrets() {
-  echo "[*] Checking for secrets in plane-ops (private repo)..."
-
-  # Try with gh CLI token
-  local token=""
-  if command -v gh &>/dev/null; then
-    token=$(gh auth token 2>/dev/null || true)
-  fi
-
-  # Try with GITHUB_TOKEN env var
-  if [ -z "$token" ] && [ -n "${GITHUB_TOKEN:-}" ]; then
-    token="$GITHUB_TOKEN"
-  fi
-
-  if [ -n "$token" ]; then
-    local tmpfile
-    tmpfile=$(mktemp)
-    if curl -fsSL -H "Authorization: token $token" "$SECRETS_URL" -o "$tmpfile" 2>/dev/null; then
-      SECRETS_FILE="$tmpfile"
-      # shellcheck disable=SC1090
-      source "$SECRETS_FILE"
-      echo "[OK] Secrets loaded from plane-ops. Interactive prompts will be skipped."
-      return 0
-    fi
-    rm -f "$tmpfile"
-  fi
-
-  echo "[!] Could not fetch secrets (no access to plane-ops). Will prompt for values."
-  return 1
+# ----- Try to fetch secrets from SSM Parameter Store -----
+ssm_get() {
+  aws ssm get-parameter --region "$AWS_REGION" --name "$1" --with-decryption --query "Parameter.Value" --output text 2>/dev/null
 }
 
-try_fetch_secrets || true
+try_fetch_ssm() {
+  if ! command -v aws &>/dev/null; then
+    echo "[!] AWS CLI not found. Will prompt for values."
+    return 1
+  fi
+
+  echo "[*] Fetching secrets from SSM Parameter Store..."
+  S3_ACCESS_KEY_ID=$(ssm_get "$SSM_PREFIX/s3-access-key-id") || { echo "[!] SSM access failed. Will prompt for values."; return 1; }
+  S3_SECRET_ACCESS_KEY=$(ssm_get "$SSM_PREFIX/s3-secret-access-key")
+  S3_BUCKET_NAME=$(ssm_get "$SSM_PREFIX/s3-bucket-name")
+  S3_REGION=$(ssm_get "$SSM_PREFIX/s3-region")
+  R53_ACCESS_KEY_ID=$(ssm_get "$SSM_PREFIX/r53-access-key-id")
+  R53_SECRET_ACCESS_KEY=$(ssm_get "$SSM_PREFIX/r53-secret-access-key")
+  R53_HOSTED_ZONE_ID=$(ssm_get "$SSM_PREFIX/r53-hosted-zone-id")
+  SITE_DOMAIN=$(ssm_get "$SSM_PREFIX/site-domain")
+  CERT_EMAIL=$(ssm_get "$SSM_PREFIX/cert-email")
+  GHCR_USER=$(ssm_get "$SSM_PREFIX/ghcr-user")
+
+  echo "[OK] Secrets loaded from SSM. Interactive prompts will be skipped."
+  return 0
+}
+
+try_fetch_ssm || true
 
 # ----- Detect OS & install Docker -----
 install_docker() {
