@@ -34,28 +34,17 @@ services:
     container_name: api
     image: ghcr.io/kamei-daisuke/plane-backend:${IMAGE_TAG:-keis}
     restart: always
-    command: ./bin/docker-entrypoint-api.sh
+    command: >-
+      bash -c "./bin/docker-entrypoint-api.sh &
+      celery -A plane worker -l info --pool=solo --concurrency=1 --max-memory-per-child=150000 &
+      wait -n; exit 1"
     env_file:
       - ./apps/api/.env
     environment:
       GUNICORN_WORKERS: 1
-    mem_limit: 320m
-    mem_reservation: 160m
+    mem_limit: 384m
+    mem_reservation: 192m
     depends_on:
-      - plane-db
-      - plane-redis
-
-  worker:
-    container_name: bgworker
-    image: ghcr.io/kamei-daisuke/plane-backend:${IMAGE_TAG:-keis}
-    restart: always
-    command: ./bin/docker-entrypoint-worker.sh
-    env_file:
-      - ./apps/api/.env
-    mem_limit: 192m
-    mem_reservation: 96m
-    depends_on:
-      - api
       - plane-db
       - plane-redis
 
