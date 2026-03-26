@@ -86,7 +86,7 @@ setup_swap() {
 
 download_files() {
   echo "[*] Setting up $PLANE_DIR ..."
-  mkdir -p "$PLANE_DIR/apps/api"
+  mkdir -p "$PLANE_DIR/apps/api" "$PLANE_DIR/proxy-config"
 
   curl -fsSL "$REPO_RAW/docker-compose.deploy.yml" -o "$PLANE_DIR/docker-compose.deploy.yml"
   curl -fsSL "$REPO_RAW/.env.deploy.example"       -o "$PLANE_DIR/.env.deploy.example"
@@ -100,60 +100,129 @@ download_files() {
 }
 
 generate_secrets() {
-  # Generate random passwords if still using defaults
-  local pg_pass
+  local pg_pass secret_key live_secret
   pg_pass=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 20)
-  local mq_pass
-  mq_pass=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 20)
-  local minio_key
-  minio_key=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 20)
-  local minio_secret
-  minio_secret=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32)
-  local live_secret
+  secret_key=$(openssl rand -hex 32)
   live_secret=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32)
 
   # .env
-  sed -i "s|POSTGRES_PASSWORD=plane|POSTGRES_PASSWORD=$pg_pass|g"       "$PLANE_DIR/.env"
-  sed -i "s|RABBITMQ_PASSWORD=plane|RABBITMQ_PASSWORD=$mq_pass|g"      "$PLANE_DIR/.env"
-  sed -i "s|AWS_ACCESS_KEY_ID=access-key|AWS_ACCESS_KEY_ID=$minio_key|g"         "$PLANE_DIR/.env"
-  sed -i "s|AWS_SECRET_ACCESS_KEY=secret-key|AWS_SECRET_ACCESS_KEY=$minio_secret|g" "$PLANE_DIR/.env"
+  sed -i "s|POSTGRES_PASSWORD=plane|POSTGRES_PASSWORD=$pg_pass|g" "$PLANE_DIR/.env"
 
   # apps/api/.env
-  sed -i "s|POSTGRES_PASSWORD=plane|POSTGRES_PASSWORD=$pg_pass|g"       "$PLANE_DIR/apps/api/.env"
-  sed -i "s|RABBITMQ_PASSWORD=plane|RABBITMQ_PASSWORD=$mq_pass|g"      "$PLANE_DIR/apps/api/.env"
-  sed -i "s|AWS_ACCESS_KEY_ID=access-key|AWS_ACCESS_KEY_ID=$minio_key|g"         "$PLANE_DIR/apps/api/.env"
-  sed -i "s|AWS_SECRET_ACCESS_KEY=secret-key|AWS_SECRET_ACCESS_KEY=$minio_secret|g" "$PLANE_DIR/apps/api/.env"
-  sed -i "s|LIVE_SERVER_SECRET_KEY=secret-key|LIVE_SERVER_SECRET_KEY=$live_secret|g" "$PLANE_DIR/apps/api/.env"
-
-  # Fix DATABASE_URL with new password
+  sed -i "s|POSTGRES_PASSWORD=plane|POSTGRES_PASSWORD=$pg_pass|g"                     "$PLANE_DIR/apps/api/.env"
+  sed -i "s|SECRET_KEY=$|SECRET_KEY=$secret_key|g"                                    "$PLANE_DIR/apps/api/.env"
+  sed -i "s|LIVE_SERVER_SECRET_KEY=secret-key|LIVE_SERVER_SECRET_KEY=$live_secret|g"   "$PLANE_DIR/apps/api/.env"
   sed -i "s|DATABASE_URL=postgresql://plane:plane@|DATABASE_URL=postgresql://plane:$pg_pass@|g" "$PLANE_DIR/apps/api/.env"
 
-  echo "[OK] Random secrets generated."
+  echo "[OK] Random secrets generated (DB password, SECRET_KEY, LIVE_SERVER_SECRET_KEY)."
+}
+
+configure_s3() {
+  echo ""
+  echo "=== S3 Configuration ==="
+  echo "Plane uses S3 for file storage. You need an IAM user with S3 access."
+  echo ""
+  read -rp "AWS S3 Access Key ID: " s3_key
+  read -rsp "AWS S3 Secret Access Key: " s3_secret
+  echo ""
+  read -rp "S3 Bucket Name [plane-keis-uploads]: " s3_bucket
+  s3_bucket="${s3_bucket:-plane-keis-uploads}"
+  read -rp "AWS Region [ap-northeast-1]: " aws_region
+  aws_region="${aws_region:-ap-northeast-1}"
+
+  sed -i "s|AWS_ACCESS_KEY_ID=$|AWS_ACCESS_KEY_ID=$s3_key|g"           "$PLANE_DIR/apps/api/.env"
+  sed -i "s|AWS_SECRET_ACCESS_KEY=$|AWS_SECRET_ACCESS_KEY=$s3_secret|g" "$PLANE_DIR/apps/api/.env"
+  sed -i "s|AWS_S3_BUCKET_NAME=plane-keis-uploads|AWS_S3_BUCKET_NAME=$s3_bucket|g" "$PLANE_DIR/apps/api/.env"
+  sed -i "s|AWS_REGION=ap-northeast-1|AWS_REGION=$aws_region|g"         "$PLANE_DIR/apps/api/.env"
+
+  echo "[OK] S3 configured: bucket=$s3_bucket, region=$aws_region"
 }
 
 configure_urls() {
   echo ""
+  echo "=== Domain / URL Configuration ==="
   read -rp "Enter your domain or public IP (e.g. plane.example.com or 1.2.3.4): " site_addr
 
   if [ -z "$site_addr" ]; then
     echo "[!] No address provided. Using :80 (HTTP on all interfaces)"
     site_addr=":80"
     base_url="http://localhost"
+  elif [[ "$site_addr" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    # IP address — HTTP only
+    base_url="http://$site_addr"
   else
-    # If it looks like an IP, use http://IP
-    if [[ "$site_addr" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-      sed -i "s|SITE_ADDRESS=:80|SITE_ADDRESS=:80|g" "$PLANE_DIR/.env"
-      base_url="http://$site_addr"
-    else
-      # Domain — use HTTPS
-      sed -i "s|SITE_ADDRESS=:80|SITE_ADDRESS=$site_addr|g" "$PLANE_DIR/.env"
-      read -rp "Email for Let's Encrypt SSL certificate: " cert_email
-      if [ -n "$cert_email" ]; then
-        sed -i "s|# CERT_EMAIL=email you@example.com|CERT_EMAIL=email $cert_email|g" "$PLANE_DIR/.env"
-        sed -i "s|CERT_EMAIL=$|CERT_EMAIL=email $cert_email|g" "$PLANE_DIR/.env"
-      fi
-      base_url="https://$site_addr"
+    # Domain — HTTPS with Route53 DNS challenge
+    sed -i "s|SITE_ADDRESS=:80|SITE_ADDRESS=$site_addr|g" "$PLANE_DIR/.env"
+    base_url="https://$site_addr"
+
+    read -rp "Email for Let's Encrypt certificate: " cert_email
+    if [ -n "$cert_email" ]; then
+      echo "CERT_EMAIL=$cert_email" >> "$PLANE_DIR/.env"
     fi
+
+    echo ""
+    echo "=== Route53 DNS Challenge (for HTTPS) ==="
+    echo "Required for automatic HTTPS without opening ports to the internet."
+    echo "Use a dedicated IAM user with Route53 ChangeResourceRecordSets permission."
+    echo ""
+    read -rp "Route53 AWS Access Key ID: " r53_key
+    read -rsp "Route53 AWS Secret Access Key: " r53_secret
+    echo ""
+    read -rp "Route53 Hosted Zone ID: " r53_zone
+
+    echo "PROXY_AWS_ACCESS_KEY_ID=$r53_key"       >> "$PLANE_DIR/.env"
+    echo "PROXY_AWS_SECRET_ACCESS_KEY=$r53_secret" >> "$PLANE_DIR/.env"
+    echo "ROUTE53_HOSTED_ZONE_ID=$r53_zone"       >> "$PLANE_DIR/.env"
+
+    # Create Caddyfile with Route53 DNS challenge
+    cat > "$PLANE_DIR/proxy-config/Caddyfile" <<'CADDYEOF'
+{
+	acme_ca {$CERT_ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
+	servers {
+		max_header_size 25MB
+		client_ip_headers X-Forwarded-For X-Real-IP
+		trusted_proxies static {$TRUSTED_PROXIES:0.0.0.0/0}
+	}
+}
+
+(plane_proxy) {
+	request_body {
+		max_size {$FILE_SIZE_LIMIT}
+	}
+
+	redir /spaces /spaces/ permanent
+	reverse_proxy /spaces/* space:3000
+
+	redir /god-mode /god-mode/ permanent
+	reverse_proxy /god-mode/* admin:3000
+
+	reverse_proxy /live/* live:3000
+	reverse_proxy /api/* api:8000
+	reverse_proxy /auth/* api:8000
+	reverse_proxy /static/* api:8000
+
+	reverse_proxy /* web:3000
+}
+
+{$SITE_ADDRESS} {
+	tls {$CERT_EMAIL} {
+		dns route53 {
+			region {$ROUTE53_AWS_REGION:ap-northeast-1}
+			access_key_id {$ROUTE53_ACCESS_KEY_ID}
+			secret_access_key {$ROUTE53_SECRET_ACCESS_KEY}
+			hosted_zone_id {$ROUTE53_HOSTED_ZONE_ID}
+		}
+	}
+	import plane_proxy
+}
+CADDYEOF
+
+    # Add Caddyfile volume mount to compose if not present
+    if ! grep -q 'proxy-config/Caddyfile' "$PLANE_DIR/docker-compose.deploy.yml"; then
+      sed -i '/caddy_data:\/data/a\      - ./proxy-config/Caddyfile:/etc/caddy/Caddyfile:ro' "$PLANE_DIR/docker-compose.deploy.yml"
+    fi
+
+    echo "[OK] Route53 DNS challenge configured."
   fi
 
   # Update API .env URLs
@@ -168,7 +237,7 @@ configure_urls() {
 
 login_ghcr() {
   echo ""
-  echo "GitHub Container Registry login required."
+  echo "=== GitHub Container Registry ==="
   echo "Create a PAT at: https://github.com/settings/tokens"
   echo "  -> Scope: read:packages"
   echo ""
@@ -196,8 +265,11 @@ start_plane() {
   echo "  URL: $base_url"
   echo "  Logs: cd $PLANE_DIR && docker compose -f docker-compose.deploy.yml logs -f"
   echo ""
-  echo "  Initial startup may take 1-2 minutes."
+  echo "  Initial startup may take 5-10 minutes on 1GB instances."
   echo "  Run 'docker compose -f docker-compose.deploy.yml ps' to check status."
+  echo ""
+  echo "  After initial setup, you can stop Admin to save memory:"
+  echo "    docker compose -f docker-compose.deploy.yml stop admin"
   echo "============================================"
 }
 
@@ -207,6 +279,7 @@ install_compose
 setup_swap
 download_files
 generate_secrets
+configure_s3
 configure_urls
 login_ghcr
 start_plane
