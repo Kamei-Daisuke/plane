@@ -50,11 +50,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:
           context: .
           file: ./apps/web/Dockerfile.web
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/${{ needs.setup.outputs.image_owner }}/plane-frontend:${{ github.ref_name }}
           cache-from: type=gha
@@ -74,11 +76,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:
           context: .
           file: ./apps/admin/Dockerfile.admin
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/${{ needs.setup.outputs.image_owner }}/plane-admin:${{ github.ref_name }}
           cache-from: type=gha
@@ -98,11 +102,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:
           context: ./apps/api
           file: ./apps/api/Dockerfile.api
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/${{ needs.setup.outputs.image_owner }}/plane-backend:${{ github.ref_name }}
           cache-from: type=gha
@@ -122,11 +128,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:
           context: ./apps/proxy
           file: ./apps/proxy/Dockerfile.ce
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/${{ needs.setup.outputs.image_owner }}/plane-proxy:${{ github.ref_name }}
           cache-from: type=gha
@@ -146,11 +154,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:
           context: .
           file: ./apps/space/Dockerfile.space
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/${{ needs.setup.outputs.image_owner }}/plane-space:${{ github.ref_name }}
           cache-from: type=gha
@@ -170,11 +180,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:
           context: .
           file: ./apps/live/Dockerfile.live
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/${{ needs.setup.outputs.image_owner }}/plane-live:${{ github.ref_name }}
           cache-from: type=gha
