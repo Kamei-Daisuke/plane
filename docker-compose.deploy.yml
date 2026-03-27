@@ -34,16 +34,15 @@ services:
     container_name: api
     image: ghcr.io/kamei-daisuke/plane-backend:${IMAGE_TAG:-keis}
     restart: always
-    command: >-
-      bash -c "./bin/docker-entrypoint-api.sh &
-      celery -A plane worker -l info --pool=solo --concurrency=1 --max-memory-per-child=150000 &
-      wait -n; exit 1"
+    command: ./bin/docker-entrypoint-api.sh
     env_file:
       - ./apps/api/.env
     environment:
       GUNICORN_WORKERS: 1
-    mem_limit: 384m
-    mem_reservation: 192m
+      EMBED_CELERY: 1
+      GUNICORN_CMD_ARGS: "--config python:plane.gunicorn_conf"
+    mem_limit: 256m
+    mem_reservation: 128m
     depends_on:
       - plane-db
       - plane-redis
