@@ -150,6 +150,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platform }}
           push: true
+          provenance: false
           tags: ghcr.io/${{ needs.setup.outputs.image_owner }}/${{ matrix.image_name }}:${{ github.ref_name }}-${{ matrix.suffix }}
           cache-from: type=gha,scope=${{ matrix.service }}-${{ matrix.suffix }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}-${{ matrix.suffix }}
