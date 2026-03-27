@@ -284,11 +284,11 @@ Internet
   ▼
 Caddy (proxy)  ─── HTTPS (Let's Encrypt via Route53 DNS challenge)
   │
-  ├─ /api/*, /auth/*, /static/*  → API (gunicorn + celery 同居)
+  ├─ /api/*, /auth/*, /static/*  → API (gunicorn + embedded celery)
   ├─ /god-mode/*                 → Admin (nginx + Next.js)
   └─ /*                          → Web (nginx + Next.js)
 
-API コンテナ (gunicorn + celery worker)
+API コンテナ (gunicorn worker + celery worker in same process)
     ──→ PostgreSQL
     ──→ Redis (キャッシュ + Celery ブローカー)
     ──→ S3 (ファイルストレージ、署名付き URL)
@@ -298,19 +298,24 @@ API コンテナ (gunicorn + celery worker)
 
 - **RabbitMQ → 削除**: Celery ブローカーを Redis に変更（`AMQP_URL=redis://plane-redis:6379/1`）
 - **MinIO → 削除**: S3 に置き換え。署名付き URL でブラウザから直接アクセス
-- **Worker → API に統合**: gunicorn と celery を1コンテナで実行。Django のインポート分（~120MB）を共有しメモリ節約。分離が必要になったら docker-compose の command を分けるだけで戻せる
+- **Worker → API プロセスに埋め込み**: gunicorn の `post_fork` フックで Celery worker をデーモンスレッドとして起動（`plane/gunicorn_conf.py`）。同一プロセスで Django のインポート済みモジュール（~120MB）を完全共有。`EMBED_CELERY=1` で有効化（デプロイ環境のみ）
 
-## メモリ構成（合計 ~584MB）
+### API + Worker を分離したい場合
 
-| サービス | mem_limit | 備考 |
-|---|---|---|
-| API + Worker | 384m | gunicorn 1 worker + celery solo pool |
-| Migrator | 256m | 起動時のみ（完了後メモリ解放） |
-| DB (PostgreSQL) | 64m | shared_buffers=32MB |
-| Web | 32m | nginx 静的配信 |
-| Admin | 32m | 初期設定後は停止可 |
-| Proxy (Caddy) | 16m | HTTPS + リバースプロキシ |
-| Redis | 24m | キャッシュ + Celery ブローカー |
+`docker-compose.deploy.yml` で `EMBED_CELERY` を外し、別途 worker サービスを追加する。
+Django のインポートが2重になるため、合計で ~120MB 多く消費する。
+
+## メモリ構成（合計 ~428MB）
+
+| サービス | mem_limit | 実使用量 | 備考 |
+|---|---|---|---|
+| API (+ embedded Celery) | 256m | ~194m | gunicorn 1 worker + celery solo pool（同一プロセス） |
+| Migrator | 256m | — | 起動時のみ（完了後メモリ解放） |
+| DB (PostgreSQL) | 64m | ~25m | shared_buffers=32MB |
+| Web | 32m | ~8m | nginx 静的配信 |
+| Admin | 32m | ~7m | 初期設定後は停止可 |
+| Redis | 24m | ~3m | キャッシュ + Celery ブローカー |
+| Proxy (Caddy) | 16m | ~11m | HTTPS + リバースプロキシ |
 
 ---
 
@@ -458,11 +463,6 @@ docker logs api 2>&1 | tail -20
 - `SECRET_KEY env variable is required.` → `apps/api/.env` に `SECRET_KEY` を追加
 - `Waiting for database migrations to complete...` → migrator の完了を待つ（初回は5〜10分）
 - OOM Killed → `docker inspect api --format '{{.State.OOMKilled}}'` で確認。メモリ不足なら mem_limit を上げる
-
-### API + Worker を分離したい場合
-
-docker-compose.deploy.yml の api サービスの command を元に戻し、worker サービスを追加する。
-Django のインポートが2重になるため、合計で ~100MB 多く消費する。
 
 ### Proxy がリスタートを繰り返す
 
