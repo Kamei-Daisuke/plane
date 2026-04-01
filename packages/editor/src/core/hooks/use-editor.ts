@@ -11,6 +11,7 @@ import type { MarkdownStorage } from "tiptap-markdown";
 import { CoreEditorExtensions } from "@/extensions";
 // helpers
 import { getEditorRefHelpers } from "@/helpers/editor-ref";
+import { sanitizeCodeBlocks } from "@/helpers/sanitize-code-blocks";
 // props
 import { CoreEditorProps } from "@/props";
 // types
@@ -83,15 +84,15 @@ export const useEditor = (props: TEditorHookProps) => {
         }),
         ...extensions,
       ],
-      content: initialValue,
+      content: typeof initialValue === "string" ? sanitizeCodeBlocks(initialValue) : initialValue,
       onCreate: () => handleEditorReady?.(true),
       onTransaction: () => {
         onTransaction?.();
       },
-      onUpdate: ({ editor, transaction }) => {
+      onUpdate: ({ editor: ed, transaction }) => {
         // Check if this update is only due to migration update
         const isMigrationUpdate = transaction?.getMeta("uniqueIdOnlyChange") === true;
-        onChange?.(editor.getJSON(), editor.getHTML(), { isMigrationUpdate });
+        onChange?.(ed.getJSON(), ed.getHTML(), { isMigrationUpdate });
       },
       onDestroy: () => handleEditorReady?.(false),
       onFocus: onEditorFocus,
@@ -108,7 +109,7 @@ export const useEditor = (props: TEditorHookProps) => {
       const { uploadInProgress: isUploadInProgress } = editor.storage.utility;
       if (!editor.isDestroyed && !isUploadInProgress) {
         try {
-          editor.commands.setContent(value, false, {
+          editor.commands.setContent(typeof value === "string" ? sanitizeCodeBlocks(value) : value, false, {
             preserveWhitespace: true,
           });
           if (editor.state.selection) {
@@ -133,8 +134,8 @@ export const useEditor = (props: TEditorHookProps) => {
   // subscribe to assets list changes
   const assetsList = useEditorState({
     editor,
-    selector: ({ editor }) => ({
-      assets: editor?.storage.utility?.assetsList ?? [],
+    selector: ({ editor: ed }) => ({
+      assets: ed?.storage.utility?.assetsList ?? [],
     }),
   });
   // trigger callback when assets list changes

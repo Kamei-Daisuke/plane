@@ -10,6 +10,7 @@ import { DOMSerializer } from "@tiptap/pm/model";
 import * as Y from "yjs";
 // plane imports
 import { convertHTMLToMarkdown } from "@plane/utils";
+import { sanitizeCodeBlocks } from "@/helpers/sanitize-code-blocks";
 // components
 import { getEditorMenuItems } from "@/components/menus";
 // constants
@@ -126,11 +127,12 @@ export const getEditorRefHelpers = (args: TArgs): EditorRefApi => {
       scrollSummary(editor, marking);
     },
     setEditorValue: (content, emitUpdate = false) => {
+      const sanitized = typeof content === "string" ? sanitizeCodeBlocks(content) : content;
       editor
         ?.chain()
         .setMeta(CORE_EDITOR_META.SKIP_FILE_DELETION, true)
         .setMeta(CORE_EDITOR_META.INTENTIONAL_DELETION, true)
-        .setContent(content, emitUpdate, {
+        .setContent(sanitized, emitUpdate, {
           preserveWhitespace: true,
         })
         .run();
@@ -140,16 +142,16 @@ export const getEditorRefHelpers = (args: TArgs): EditorRefApi => {
       const { itemKey } = props;
       const editorItems = getEditorMenuItems(editor);
 
-      const getEditorMenuItem = (itemKey: TEditorCommands) => editorItems.find((item) => item.key === itemKey);
+      const findMenuItem = (key: TEditorCommands) => editorItems.find((item) => item.key === key);
 
-      const item = getEditorMenuItem(itemKey);
+      const item = findMenuItem(itemKey);
       if (item) {
         item.command(props);
       } else {
         console.warn(`No command found for item: ${itemKey}`);
       }
     },
-    focus: (args) => editor?.commands.focus(args),
+    focus: (focusArgs) => editor?.commands.focus(focusArgs),
     getCoordsFromPos: (pos) => editor?.view.coordsAtPos(pos ?? editor.state.selection.from),
     getCurrentCursorPosition: () => editor?.state.selection.from,
     getAttributesWithExtendedMark: (mark, attribute) => {
@@ -195,8 +197,8 @@ export const getEditorRefHelpers = (args: TArgs): EditorRefApi => {
       const { itemKey } = props;
       const editorItems = getEditorMenuItems(editor);
 
-      const getEditorMenuItem = (itemKey: TEditorCommands) => editorItems.find((item) => item.key === itemKey);
-      const item = getEditorMenuItem(itemKey);
+      const findMenuItem = (key: TEditorCommands) => editorItems.find((item) => item.key === key);
+      const item = findMenuItem(itemKey);
       if (!item) return false;
 
       return item.isActive(props);

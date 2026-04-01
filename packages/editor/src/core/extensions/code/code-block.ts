@@ -5,6 +5,7 @@
  */
 
 import { mergeAttributes, Node, textblockTypeInputRule } from "@tiptap/core";
+import { Fragment } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 // constants
 import { CORE_EXTENSIONS } from "@/constants/extension";
@@ -98,6 +99,26 @@ export const CodeBlock = Node.create<CodeBlockOptions>({
       {
         tag: "pre",
         preserveWhitespace: "full",
+        // ProseMirror's DOMParser mutates <pre> content before getContent is
+        // called, splitting code blocks at blank lines. To work around this,
+        // sanitizeCodeBlocks() stores the original text in data-code-content
+        // before the HTML reaches the parser. We recover it here.
+        getContent: (node, schema) => {
+          const el = node as HTMLElement;
+          const encoded = el.getAttribute("data-code-content");
+          if (encoded != null) {
+            try {
+              const text = decodeURIComponent(escape(atob(encoded)));
+              return text ? Fragment.from(schema.text(text)) : Fragment.empty;
+            } catch {
+              // fall through to default
+            }
+          }
+          // Fallback for HTML that was not pre-processed (e.g. paste)
+          const code = el.querySelector("code");
+          const text = (code ?? el).textContent ?? "";
+          return text ? Fragment.from(schema.text(text)) : Fragment.empty;
+        },
       },
     ];
   },
