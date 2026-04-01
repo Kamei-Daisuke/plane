@@ -14,9 +14,12 @@ const viteEnv = Object.keys(process.env)
     return a;
   }, {});
 
+const gitHash = process.env.GIT_HASH || "dev";
+
 export default defineConfig(() => ({
   define: {
     "process.env": JSON.stringify(viteEnv),
+    __GIT_HASH__: JSON.stringify(gitHash),
   },
   build: {
     assetsInlineLimit: 0,

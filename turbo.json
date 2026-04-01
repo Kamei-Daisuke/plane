@@ -3,6 +3,7 @@
   "globalDependencies": [".npmrc", ".oxfmtrc.json", ".oxlintrc.json"],
   "globalEnv": [
     "APP_VERSION",
+    "GIT_HASH",
     "DEV",
     "LOG_LEVEL",
     "NODE_ENV",
