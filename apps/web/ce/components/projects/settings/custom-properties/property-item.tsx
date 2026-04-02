@@ -9,6 +9,7 @@ import { observer } from "mobx-react";
 import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import type { TIssueTypeProperty, TIssueTypePropertyOption } from "@plane/types";
 import { useTranslation } from "@plane/i18n";
+import { PropertyIcon } from "./property-icon";
 import { PropertyForm } from "./property-form";
 import { OptionForm } from "./option-form";
 
@@ -79,13 +80,26 @@ export const PropertyItem = observer(function PropertyItem({
           </button>
         )}
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="text-sm text-custom-text-100 truncate font-medium">{property.display_name}</span>
-          {property.is_required && <span className="text-xs text-red-500">{t("project_settings.custom_properties.required")}</span>}
-          {!property.is_active && <span className="text-xs text-custom-text-400">{t("project_settings.custom_properties.inactive")}</span>}
-          <span className="text-xs text-custom-text-400 bg-custom-background-80 rounded px-1.5 py-0.5">
-            {PROPERTY_TYPE_I18N_KEY[property.property_type] ? t(PROPERTY_TYPE_I18N_KEY[property.property_type]) : property.property_type}
+          <span className="flex-shrink-0">
+            <PropertyIcon logoProps={property.logo_props} size={16} className="text-custom-text-400" />
           </span>
-          {hasOptions && <span className="text-xs text-custom-text-400">{t("project_settings.custom_properties.options_count", { count: activeOptions.length })}</span>}
+          <span className="text-sm text-custom-text-100 truncate font-medium">{property.display_name}</span>
+          {property.is_required && (
+            <span className="text-xs text-red-500">{t("project_settings.custom_properties.required")}</span>
+          )}
+          {!property.is_active && (
+            <span className="text-xs text-custom-text-400">{t("project_settings.custom_properties.inactive")}</span>
+          )}
+          <span className="text-xs text-custom-text-400 bg-custom-background-80 rounded px-1.5 py-0.5">
+            {PROPERTY_TYPE_I18N_KEY[property.property_type]
+              ? t(PROPERTY_TYPE_I18N_KEY[property.property_type])
+              : property.property_type}
+          </span>
+          {hasOptions && (
+            <span className="text-xs text-custom-text-400">
+              {t("project_settings.custom_properties.options_count", { count: activeOptions.length })}
+            </span>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <button
