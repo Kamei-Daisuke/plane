@@ -8,6 +8,8 @@ import { useState } from "react";
 import type { TIssuePropertyType, TIssueTypeProperty } from "@plane/types";
 import { useTranslation } from "@plane/i18n";
 import { Button } from "@plane/propel/button";
+import { EmojiPicker } from "@plane/propel/emoji-icon-picker";
+import { PropertyIcon } from "./property-icon";
 
 type Props = {
   initial?: Partial<TIssueTypeProperty>;
@@ -34,6 +36,10 @@ export function PropertyForm({ initial, onSubmit, onCancel }: Props) {
   const [propertyType, setPropertyType] = useState<TIssuePropertyType>(initial?.property_type ?? "text");
   const [isRequired, setIsRequired] = useState(initial?.is_required ?? false);
   const [isActive, setIsActive] = useState(initial?.is_active ?? true);
+  const [logoProps, setLogoProps] = useState<Record<string, unknown>>(
+    initial?.logo_props ?? { in_use: "icon", icon: { name: "TextCursorInput", color: "#6d7b8a" } }
+  );
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +57,7 @@ export function PropertyForm({ initial, onSubmit, onCancel }: Props) {
         property_type: propertyType,
         is_required: isRequired,
         is_active: isActive,
+        logo_props: logoProps,
       });
     } catch {
       setError(t("project_settings.custom_properties.save_failed"));
@@ -65,14 +72,33 @@ export function PropertyForm({ initial, onSubmit, onCancel }: Props) {
         <label htmlFor="prop-display-name" className="text-xs text-custom-text-300 font-medium">
           {t("project_settings.custom_properties.property_name")} *
         </label>
-        <input
-          id="prop-display-name"
-          type="text"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          placeholder={t("project_settings.custom_properties.property_name_placeholder")}
-          className="border-custom-border-200 bg-custom-background-100 text-sm text-custom-text-100 focus:ring-custom-primary-100 rounded border px-3 py-1.5 focus:ring-1 focus:outline-none"
-        />
+        <div className="flex items-center gap-2">
+          <EmojiPicker
+            iconType="lucide"
+            closeOnSelect
+            isOpen={iconPickerOpen}
+            handleToggle={setIconPickerOpen}
+            buttonClassName="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded border border-custom-border-200 bg-custom-background-100 hover:bg-custom-background-80 transition-colors"
+            label={<PropertyIcon logoProps={logoProps} size={18} />}
+            onChange={(val: any) => {
+              let logoValue = {};
+              if (val?.type === "emoji") logoValue = { value: val.value };
+              else if (val?.type === "icon") logoValue = val.value;
+              setLogoProps({ in_use: val?.type, [val?.type]: logoValue });
+              setIconPickerOpen(false);
+            }}
+            defaultIconColor={logoProps?.in_use === "icon" ? (logoProps?.icon as any)?.color : undefined}
+            defaultOpen={logoProps?.in_use === "emoji" ? "emoji" : "icon"}
+          />
+          <input
+            id="prop-display-name"
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder={t("project_settings.custom_properties.property_name_placeholder")}
+            className="border-custom-border-200 bg-custom-background-100 text-sm text-custom-text-100 focus:ring-custom-primary-100 flex-1 rounded border px-3 py-1.5 focus:ring-1 focus:outline-none"
+          />
+        </div>
         {error && <p className="text-xs text-red-500">{error}</p>}
       </div>
 
@@ -93,7 +119,9 @@ export function PropertyForm({ initial, onSubmit, onCancel }: Props) {
             </option>
           ))}
         </select>
-        {initial?.id && <p className="text-xs text-custom-text-400">{t("project_settings.custom_properties.type_not_changeable")}</p>}
+        {initial?.id && (
+          <p className="text-xs text-custom-text-400">{t("project_settings.custom_properties.type_not_changeable")}</p>
+        )}
       </div>
 
       <div className="flex items-center gap-4">

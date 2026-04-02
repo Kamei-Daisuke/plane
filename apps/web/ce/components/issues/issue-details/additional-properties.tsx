@@ -11,6 +11,8 @@ import { observer } from "mobx-react";
 import { useIssueProperty } from "@/hooks/store/use-issue-property";
 import { useMember } from "@/hooks/store/use-member";
 // components
+import { SidebarPropertyListItem } from "@/components/common/layout/sidebar/property-list-item";
+import { PropertyIcon } from "../../projects/settings/custom-properties/property-icon";
 import { PropertyField } from "../issue-properties/property-field";
 
 export type TWorkItemAdditionalSidebarProperties = {
@@ -44,7 +46,11 @@ export const WorkItemAdditionalSidebarProperties: FC<TWorkItemAdditionalSidebarP
 
     useEffect(() => {
       if (!workspaceSlug || !projectId) return;
-      if (!activeProperties.some((property) => property.property_type === "member" || property.property_type === "multi_member"))
+      if (
+        !activeProperties.some(
+          (property) => property.property_type === "member" || property.property_type === "multi_member"
+        )
+      )
         return;
       fetchProjectMembers(workspaceSlug, projectId);
     }, [workspaceSlug, projectId, activeProperties, fetchProjectMembers]);
@@ -58,13 +64,13 @@ export const WorkItemAdditionalSidebarProperties: FC<TWorkItemAdditionalSidebarP
 
     return (
       <>
-        {activeProperties.map((property) => (
-          <div key={property.id} className="flex items-start gap-2 py-2">
-            <span className="text-sm text-custom-text-300 w-1/3 shrink-0 truncate pt-1">
-              {property.display_name}
-              {property.is_required && <span className="text-red-500 ml-0.5">*</span>}
-            </span>
-            <div className="min-w-0 flex-1">
+        {activeProperties.map((property) => {
+          const PropertyIconComponent: FC<{ className?: string }> = ({ className }) => (
+            <PropertyIcon logoProps={property.logo_props} size={16} className={className} />
+          );
+
+          return (
+            <SidebarPropertyListItem key={property.id} icon={PropertyIconComponent} label={property.display_name}>
               <PropertyField
                 property={property}
                 value={values[property.id]}
@@ -72,9 +78,9 @@ export const WorkItemAdditionalSidebarProperties: FC<TWorkItemAdditionalSidebarP
                 projectId={projectId}
                 disabled={!isEditable}
               />
-            </div>
-          </div>
-        ))}
+            </SidebarPropertyListItem>
+          );
+        })}
       </>
     );
   }

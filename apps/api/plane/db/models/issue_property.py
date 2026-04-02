@@ -39,6 +39,7 @@ class IssueTypeProperty(BaseModel):
     is_required = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     sort_order = models.FloatField(default=0)
+    logo_props = models.JSONField(default=dict)
     # Default value stored as JSON (format depends on property_type)
     default_value = models.JSONField(null=True, blank=True)
 

@@ -45,6 +45,7 @@ export type TIssueTypeProperty = {
   is_required: boolean;
   is_active: boolean;
   sort_order: number;
+  logo_props?: Record<string, unknown>;
   default_value: unknown | null;
   options: TIssueTypePropertyOption[];
   created_at: string;

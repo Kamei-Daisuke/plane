@@ -39,6 +39,7 @@ class IssueTypePropertySerializer(BaseSerializer):
             "is_required",
             "is_active",
             "sort_order",
+            "logo_props",
             "default_value",
             "options",
             "created_at",
@@ -61,6 +62,7 @@ class IssueTypePropertyWriteSerializer(BaseSerializer):
             "is_required",
             "is_active",
             "sort_order",
+            "logo_props",
             "default_value",
         ]
         read_only_fields = ["id", "issue_type"]

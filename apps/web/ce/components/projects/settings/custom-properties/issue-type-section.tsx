@@ -9,6 +9,7 @@ import { observer } from "mobx-react";
 import { Plus } from "lucide-react";
 import type { TIssueType } from "@plane/types";
 import { useTranslation } from "@plane/i18n";
+import { Logo } from "@plane/propel/emoji-icon-picker";
 import { useIssueProperty } from "@/hooks/store/use-issue-property";
 import { PropertyForm } from "./property-form";
 import { PropertyItem } from "./property-item";
@@ -45,13 +46,20 @@ export const IssueTypeSection = observer(function IssueTypeSection({ issueType, 
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
+          {issueType.logo_props && (
+            <span className="grid h-5 w-5 flex-shrink-0 place-items-center">
+              <Logo logo={issueType.logo_props} size={16} />
+            </span>
+          )}
           <h3 className="text-sm text-custom-text-100 font-semibold">{issueType.name}</h3>
           {issueType.is_default && (
             <span className="bg-custom-primary-10 text-xs text-custom-primary-100 rounded px-1.5 py-0.5">
               {t("project_settings.custom_properties.default_badge")}
             </span>
           )}
-          <span className="text-xs text-custom-text-400">{t("project_settings.custom_properties.property_count", { count: properties.length })}</span>
+          <span className="text-xs text-custom-text-400">
+            {t("project_settings.custom_properties.property_count", { count: properties.length })}
+          </span>
         </div>
         <button
           type="button"
@@ -63,7 +71,9 @@ export const IssueTypeSection = observer(function IssueTypeSection({ issueType, 
         </button>
       </div>
 
-      {loading && properties.length === 0 && <div className="text-sm text-custom-text-400 py-2">{t("project_settings.custom_properties.loading")}</div>}
+      {loading && properties.length === 0 && (
+        <div className="text-sm text-custom-text-400 py-2">{t("project_settings.custom_properties.loading")}</div>
+      )}
 
       {!loading && properties.length === 0 && !addingProperty && (
         <div className="border-custom-border-200 text-sm text-custom-text-400 rounded border border-dashed py-6 text-center">
