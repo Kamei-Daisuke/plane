@@ -11,7 +11,7 @@ import { ISSUE_DISPLAY_PROPERTIES } from "@plane/constants";
 // plane i18n
 import { useTranslation } from "@plane/i18n";
 // types
-import type { IIssueDisplayProperties } from "@plane/types";
+import type { IIssueDisplayProperties, TIssueTypeProperty } from "@plane/types";
 // components
 import { FilterHeader } from "../helpers/filter-header";
 
@@ -22,6 +22,9 @@ type Props = {
   cycleViewDisabled?: boolean;
   moduleViewDisabled?: boolean;
   isEpic?: boolean;
+  customProperties?: TIssueTypeProperty[];
+  customDisplayProperties?: Record<string, boolean>;
+  onCustomPropertyToggle?: (propertyId: string) => void;
 };
 
 export const FilterDisplayProperties = observer(function FilterDisplayProperties(props: Props) {
@@ -32,6 +35,9 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
     cycleViewDisabled = false,
     moduleViewDisabled = false,
     isEpic = false,
+    customProperties = [],
+    customDisplayProperties = {},
+    onCustomPropertyToggle,
   } = props;
   // hooks
   const { t } = useTranslation();
@@ -52,7 +58,7 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
     }
   }).map((property) => {
     if (isEpic && property.key === "sub_issue_count") {
-      return { ...property, titleTranslationKey: "issue.display.properties.work_item_count" };
+      Object.assign(property, { titleTranslationKey: "issue.display.properties.work_item_count" });
     }
     return property;
   });
@@ -86,6 +92,25 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
               </button>
             </>
           ))}
+          {customProperties.length > 0 && onCustomPropertyToggle && (
+            <>
+              <div className="bg-custom-border-200 h-4 w-px" />
+              {customProperties.map((cp) => (
+                <button
+                  key={cp.id}
+                  type="button"
+                  className={`rounded-sm border px-2 py-0.5 text-11 transition-all ${
+                    customDisplayProperties[cp.id] !== false
+                      ? "border-accent-strong bg-accent-primary text-on-color"
+                      : "border-subtle hover:bg-layer-1"
+                  }`}
+                  onClick={() => onCustomPropertyToggle(cp.id)}
+                >
+                  {cp.display_name}
+                </button>
+              ))}
+            </>
+          )}
         </div>
       )}
     </>

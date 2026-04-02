@@ -8,6 +8,8 @@ import { action, makeObservable, observable, runInAction } from "mobx";
 import type { TIssueType, TIssueTypeProperty, TIssueTypePropertyOption, TIssuePropertyValues } from "@plane/types";
 import { IssuePropertyService } from "@/services/issue/issue_property.service";
 
+const CUSTOM_DISPLAY_PROPS_KEY = "plane:customDisplayProperties";
+
 export interface IIssuePropertyStore {
   // observables
   /** issueTypeId → list of properties */
@@ -16,7 +18,11 @@ export interface IIssuePropertyStore {
   valuesByIssue: Record<string, TIssuePropertyValues>;
   /** projectId → list of issue types */
   issueTypesByProject: Record<string, TIssueType[]>;
+  /** projectId → { propertyId → visible } */
+  customDisplayProperties: Record<string, Record<string, boolean>>;
   // actions
+  toggleCustomDisplayProperty(projectId: string, propertyId: string): void;
+  isCustomPropertyVisible(projectId: string, propertyId: string): boolean;
   fetchProperties(workspaceSlug: string, issueTypeId: string): Promise<TIssueTypeProperty[]>;
   fetchPropertyValues(workspaceSlug: string, projectId: string, issueId: string): Promise<TIssuePropertyValues>;
   fetchBulkPropertyValues(workspaceSlug: string, projectId: string, issueIds: string[]): Promise<void>;
@@ -69,6 +75,7 @@ export class IssuePropertyStore implements IIssuePropertyStore {
   propertiesByIssueType: Record<string, TIssueTypeProperty[]> = {};
   valuesByIssue: Record<string, TIssuePropertyValues> = {};
   issueTypesByProject: Record<string, TIssueType[]> = {};
+  customDisplayProperties: Record<string, Record<string, boolean>> = {};
 
   private service = new IssuePropertyService();
 
@@ -77,6 +84,8 @@ export class IssuePropertyStore implements IIssuePropertyStore {
       propertiesByIssueType: observable,
       valuesByIssue: observable,
       issueTypesByProject: observable,
+      customDisplayProperties: observable,
+      toggleCustomDisplayProperty: action.bound,
       fetchProperties: action.bound,
       fetchPropertyValues: action.bound,
       fetchBulkPropertyValues: action.bound,
@@ -89,6 +98,31 @@ export class IssuePropertyStore implements IIssuePropertyStore {
       updateOption: action.bound,
       deleteOption: action.bound,
     });
+    // Restore from localStorage
+    try {
+      const stored = localStorage.getItem(CUSTOM_DISPLAY_PROPS_KEY);
+      if (stored) this.customDisplayProperties = JSON.parse(stored);
+    } catch {
+      // ignore
+    }
+  }
+
+  toggleCustomDisplayProperty(projectId: string, propertyId: string): void {
+    const current = this.customDisplayProperties[projectId] ?? {};
+    const visible = current[propertyId] !== false; // default true
+    this.customDisplayProperties = {
+      ...this.customDisplayProperties,
+      [projectId]: { ...current, [propertyId]: !visible },
+    };
+    try {
+      localStorage.setItem(CUSTOM_DISPLAY_PROPS_KEY, JSON.stringify(this.customDisplayProperties));
+    } catch {
+      // ignore
+    }
+  }
+
+  isCustomPropertyVisible(projectId: string, propertyId: string): boolean {
+    return this.customDisplayProperties[projectId]?.[propertyId] !== false;
   }
 
   async fetchProperties(workspaceSlug: string, issueTypeId: string): Promise<TIssueTypeProperty[]> {
@@ -170,7 +204,12 @@ export class IssuePropertyStore implements IIssuePropertyStore {
     return updated;
   }
 
-  async deleteProperty(workspaceSlug: string, projectId: string, issueTypeId: string, propertyId: string): Promise<void> {
+  async deleteProperty(
+    workspaceSlug: string,
+    projectId: string,
+    issueTypeId: string,
+    propertyId: string
+  ): Promise<void> {
     await this.service.deleteProperty(workspaceSlug, projectId, issueTypeId, propertyId);
     runInAction(() => {
       const existing = this.propertiesByIssueType[issueTypeId] ?? [];
