@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { observer } from "mobx-react";
 import { ChartNoAxesColumn, SlidersHorizontal } from "lucide-react";
 // plane imports
@@ -59,8 +59,21 @@ export const HeaderFilters = observer(function HeaderFilters(props: Props) {
   const {
     issuesFilter: { issueFilters, updateFilters },
   } = useIssues(storeType);
-  const { propertiesByIssueType, issueTypesByProject, customDisplayProperties, toggleCustomDisplayProperty } =
-    useIssueProperty();
+  const {
+    propertiesByIssueType,
+    issueTypesByProject,
+    customDisplayProperties,
+    toggleCustomDisplayProperty,
+    fetchProjectIssueTypes,
+    fetchProperties,
+  } = useIssueProperty();
+  // Fetch issue types and their properties for the Display toggle
+  useEffect(() => {
+    if (!workspaceSlug || !projectId) return;
+    void fetchProjectIssueTypes(workspaceSlug, projectId).then((types) =>
+      Promise.all(types.map((it) => fetchProperties(workspaceSlug, it.id)))
+    );
+  }, [workspaceSlug, projectId, fetchProjectIssueTypes, fetchProperties]);
   // derived values
   const activeLayout = issueFilters?.displayFilters?.layout;
   const layoutDisplayFiltersOptions = ISSUE_STORE_TO_FILTERS_MAP[storeType]?.layoutOptions[activeLayout];
