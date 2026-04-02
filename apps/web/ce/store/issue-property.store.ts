@@ -109,7 +109,7 @@ export class IssuePropertyStore implements IIssuePropertyStore {
 
   toggleCustomDisplayProperty(projectId: string, propertyId: string): void {
     const current = this.customDisplayProperties[projectId] ?? {};
-    const visible = current[propertyId] !== false; // default true
+    const visible = current[propertyId] === true; // default false
     this.customDisplayProperties = {
       ...this.customDisplayProperties,
       [projectId]: { ...current, [propertyId]: !visible },
@@ -122,7 +122,7 @@ export class IssuePropertyStore implements IIssuePropertyStore {
   }
 
   isCustomPropertyVisible = (projectId: string, propertyId: string): boolean =>
-    this.customDisplayProperties[projectId]?.[propertyId] !== false;
+    this.customDisplayProperties[projectId]?.[propertyId] === true;
 
   async fetchProperties(workspaceSlug: string, issueTypeId: string): Promise<TIssueTypeProperty[]> {
     const properties = await this.service.getProperties(workspaceSlug, issueTypeId);
