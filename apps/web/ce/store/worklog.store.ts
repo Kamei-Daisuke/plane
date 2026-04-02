@@ -40,10 +40,10 @@ export class WorklogStore implements IWorklogStore {
     makeObservable(this, {
       worklogsByIssue: observable,
       totalByIssue: observable,
-      fetchWorklogs: action,
-      createWorklog: action,
-      updateWorklog: action,
-      deleteWorklog: action,
+      fetchWorklogs: action.bound,
+      createWorklog: action.bound,
+      updateWorklog: action.bound,
+      deleteWorklog: action.bound,
     });
   }
 
