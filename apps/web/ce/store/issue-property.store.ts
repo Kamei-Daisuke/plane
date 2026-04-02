@@ -121,9 +121,8 @@ export class IssuePropertyStore implements IIssuePropertyStore {
     }
   }
 
-  isCustomPropertyVisible(projectId: string, propertyId: string): boolean {
-    return this.customDisplayProperties[projectId]?.[propertyId] !== false;
-  }
+  isCustomPropertyVisible = (projectId: string, propertyId: string): boolean =>
+    this.customDisplayProperties[projectId]?.[propertyId] !== false;
 
   async fetchProperties(workspaceSlug: string, issueTypeId: string): Promise<TIssueTypeProperty[]> {
     const properties = await this.service.getProperties(workspaceSlug, issueTypeId);
