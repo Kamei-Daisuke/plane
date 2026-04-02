@@ -56,9 +56,10 @@ export const FilterDisplayProperties = observer(function FilterDisplayProperties
       default:
         return true;
     }
+    // oxlint-disable-next-line no-map-spread -- shallow copy is intentional to avoid mutating the constant
   }).map((property) => {
     if (isEpic && property.key === "sub_issue_count") {
-      Object.assign(property, { titleTranslationKey: "issue.display.properties.work_item_count" });
+      return { ...property, titleTranslationKey: "issue.display.properties.work_item_count" };
     }
     return property;
   });
