@@ -20,7 +20,8 @@ export type TWorkItemLayoutAdditionalProperties = {
 
 export const WorkItemLayoutAdditionalProperties: FC<TWorkItemLayoutAdditionalProperties> = observer(
   function WorkItemLayoutAdditionalProperties({ issue }) {
-    const { propertiesByIssueType, valuesByIssue, fetchProperties, fetchPropertyValues } = useIssueProperty();
+    const { propertiesByIssueType, valuesByIssue, fetchProperties, fetchPropertyValues, isCustomPropertyVisible } =
+      useIssueProperty();
     const {
       getUserDetails,
       project: { fetchProjectMembers },
@@ -38,12 +39,13 @@ export const WorkItemLayoutAdditionalProperties: FC<TWorkItemLayoutAdditionalPro
     const properties = typeId ? (propertiesByIssueType[typeId] ?? []).filter((p) => p.is_active) : [];
     const values = projectId ? (valuesByIssue[`${projectId}:${issue.id}`] ?? {}) : {};
 
+    const hasMemberProperty = properties.some(
+      (property) => property.property_type === "member" || property.property_type === "multi_member"
+    );
     useEffect(() => {
-      if (!workspaceSlug || !projectId) return;
-      if (!properties.some((property) => property.property_type === "member" || property.property_type === "multi_member"))
-        return;
+      if (!workspaceSlug || !projectId || !hasMemberProperty) return;
       fetchProjectMembers(workspaceSlug, projectId);
-    }, [workspaceSlug, projectId, properties, fetchProjectMembers]);
+    }, [workspaceSlug, projectId, hasMemberProperty, fetchProjectMembers]);
 
     if (!typeId || !projectId) return <></>;
 
@@ -52,6 +54,8 @@ export const WorkItemLayoutAdditionalProperties: FC<TWorkItemLayoutAdditionalPro
     return (
       <>
         {properties.map((property) => {
+          // Respect Display toggle
+          if (projectId && !isCustomPropertyVisible(projectId, property.id)) return null;
           const val = values[property.id];
           if (val == null || val === "" || (Array.isArray(val) && val.length === 0)) return null;
 

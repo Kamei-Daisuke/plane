@@ -12,6 +12,7 @@ import type {
   IIssueDisplayProperties,
   ILayoutDisplayFiltersOptions,
   TIssueGroupByOptions,
+  TIssueTypeProperty,
 } from "@plane/types";
 // components
 import {
@@ -32,6 +33,9 @@ type Props = {
   cycleViewDisabled?: boolean;
   moduleViewDisabled?: boolean;
   isEpic?: boolean;
+  customProperties?: TIssueTypeProperty[];
+  customDisplayProperties?: Record<string, boolean>;
+  onCustomPropertyToggle?: (propertyId: string) => void;
 };
 
 export const DisplayFiltersSelection = observer(function DisplayFiltersSelection(props: Props) {
@@ -45,6 +49,9 @@ export const DisplayFiltersSelection = observer(function DisplayFiltersSelection
     cycleViewDisabled = false,
     moduleViewDisabled = false,
     isEpic = false,
+    customProperties,
+    customDisplayProperties,
+    onCustomPropertyToggle,
   } = props;
 
   const isDisplayFilterEnabled = (displayFilter: keyof IIssueDisplayFilterOptions) =>
@@ -70,6 +77,9 @@ export const DisplayFiltersSelection = observer(function DisplayFiltersSelection
             cycleViewDisabled={cycleViewDisabled}
             moduleViewDisabled={moduleViewDisabled}
             isEpic={isEpic}
+            customProperties={customProperties}
+            customDisplayProperties={customDisplayProperties}
+            onCustomPropertyToggle={onCustomPropertyToggle}
           />
         </div>
       )}

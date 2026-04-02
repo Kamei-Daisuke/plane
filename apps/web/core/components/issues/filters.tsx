@@ -15,6 +15,7 @@ import type { IIssueDisplayFilterOptions, IIssueDisplayProperties } from "@plane
 import { EIssueLayoutTypes, EIssuesStoreType } from "@plane/types";
 // hooks
 import { useIssues } from "@/hooks/store/use-issues";
+import { useIssueProperty } from "@/hooks/store/use-issue-property";
 // plane web imports
 import type { TProject } from "@/plane-web/types";
 // local imports
@@ -58,9 +59,19 @@ export const HeaderFilters = observer(function HeaderFilters(props: Props) {
   const {
     issuesFilter: { issueFilters, updateFilters },
   } = useIssues(storeType);
+  const { propertiesByIssueType, issueTypesByProject, customDisplayProperties, toggleCustomDisplayProperty } =
+    useIssueProperty();
   // derived values
   const activeLayout = issueFilters?.displayFilters?.layout;
   const layoutDisplayFiltersOptions = ISSUE_STORE_TO_FILTERS_MAP[storeType]?.layoutOptions[activeLayout];
+  // Collect all active custom properties across issue types in this project
+  const projectIssueTypes = issueTypesByProject[projectId] ?? [];
+  const allCustomProperties = projectIssueTypes.flatMap((it) =>
+    (propertiesByIssueType[it.id] ?? []).filter((p) => p.is_active)
+  );
+  // Deduplicate by id
+  const uniqueCustomProperties = allCustomProperties.filter((p, i, arr) => arr.findIndex((q) => q.id === p.id) === i);
+  const projectCustomDisplay = customDisplayProperties[projectId] ?? {};
 
   const handleLayoutChange = useCallback(
     (layout: EIssueLayoutTypes) => {
@@ -123,6 +134,9 @@ export const HeaderFilters = observer(function HeaderFilters(props: Props) {
           cycleViewDisabled={!currentProjectDetails?.cycle_view}
           moduleViewDisabled={!currentProjectDetails?.module_view}
           isEpic={storeType === EIssuesStoreType.EPIC}
+          customProperties={uniqueCustomProperties}
+          customDisplayProperties={projectCustomDisplay}
+          onCustomPropertyToggle={(propertyId) => toggleCustomDisplayProperty(projectId, propertyId)}
         />
       </FiltersDropdown>
       {canUserCreateIssue ? (
