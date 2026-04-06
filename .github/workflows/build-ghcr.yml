@@ -183,11 +183,11 @@ jobs:
   deploy:
     name: Deploy to Dokploy
     needs: [manifest]
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, keis-oci]
     steps:
       - name: Trigger Dokploy compose redeploy
         run: |
-          curl -sf "https://dokploy.example.com/api/compose.deploy" \
+          curl -sf "http://localhost:3000/api/compose.deploy" \
             -X POST \
             -H "x-api-key: ${{ secrets.DOKPLOY_API_KEY }}" \
             -H "Content-Type: application/json" \
