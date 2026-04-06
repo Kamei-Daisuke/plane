@@ -187,5 +187,9 @@ jobs:
     steps:
       - name: Trigger Dokploy compose redeploy
         run: |
-          curl -sf "https://dokploy.example.com/api/compose.redeploy"             -X POST             -H "x-api-key: ${{ secrets.DOKPLOY_API_KEY }}"             -H "Content-Type: application/json"             -d '{"composeId":"CLbGP6n6oJszVBx7q4pm0"}'
+          curl -sf "https://dokploy.example.com/api/compose.deploy" \
+            -X POST \
+            -H "x-api-key: ${{ secrets.DOKPLOY_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"composeId":"katBqCyfrdUthM-BBLa50"}'
           echo "Dokploy redeploy triggered"
