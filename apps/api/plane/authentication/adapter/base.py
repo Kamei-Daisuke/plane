@@ -90,7 +90,7 @@ class Adapter:
     def validate_password(self, email):
         """Validate password strength"""
         results = zxcvbn(self.code)
-        if results["score"] < 3:
+        if results["score"] < 1:
             self.logger.warning("Password is not strong enough")
             raise AuthenticationException(
                 error_code=AUTHENTICATION_ERROR_CODES["PASSWORD_TOO_WEAK"],
