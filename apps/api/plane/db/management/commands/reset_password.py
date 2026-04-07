@@ -55,7 +55,7 @@ class Command(BaseCommand):
 
         results = zxcvbn(password)
 
-        if results["score"] < 3:
+        if results["score"] < 1:
             raise CommandError("Password is too common please set a complex password")
 
         # Set user password

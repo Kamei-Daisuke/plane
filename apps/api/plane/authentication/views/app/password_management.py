@@ -143,7 +143,7 @@ class ResetPasswordEndpoint(View):
 
             # Check the password complexity
             results = zxcvbn(password)
-            if results["score"] < 3:
+            if results["score"] < 1:
                 exc = AuthenticationException(
                     error_code=AUTHENTICATION_ERROR_CODES["PASSWORD_TOO_WEAK"],
                     error_message="PASSWORD_TOO_WEAK",
