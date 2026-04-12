@@ -1,0 +1,5 @@
+{
+  "permissions": {
+    "allow": ["mcp__claude_ai_Slack__slack_search_public_and_private", "mcp__Claude_Preview__preview_start"]
+  }
+}
