@@ -36,9 +36,7 @@ export function PropertyForm({ initial, onSubmit, onCancel }: Props) {
   const [propertyType, setPropertyType] = useState<TIssuePropertyType>(initial?.property_type ?? "text");
   const [isRequired, setIsRequired] = useState(initial?.is_required ?? false);
   const [isActive, setIsActive] = useState(initial?.is_active ?? true);
-  const [logoProps, setLogoProps] = useState<Record<string, unknown>>(
-    initial?.logo_props ?? { in_use: "icon", icon: { name: "TextCursorInput", color: "#6d7b8a" } }
-  );
+  const [logoProps, setLogoProps] = useState<Record<string, unknown>>(initial?.logo_props ?? {});
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
