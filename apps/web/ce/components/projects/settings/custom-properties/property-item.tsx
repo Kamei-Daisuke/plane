@@ -111,21 +111,21 @@ export const PropertyItem = observer(function PropertyItem({
             <Pencil className="h-3.5 w-3.5" />
           </button>
           {confirmDelete ? (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={async () => {
                   await onDelete(property.id);
                   setConfirmDelete(false);
                 }}
-                className="bg-red-500 text-xs hover:bg-red-600 rounded px-2 py-0.5 text-white"
+                className="bg-red-500 text-xs hover:bg-red-600 rounded px-2.5 py-1 font-medium whitespace-nowrap text-white"
               >
                 {t("project_settings.custom_properties.confirm_delete")}
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmDelete(false)}
-                className="text-xs text-custom-text-400 hover:text-custom-text-200"
+                className="text-xs text-custom-text-400 hover:text-custom-text-200 whitespace-nowrap"
               >
                 {t("project_settings.custom_properties.cancel")}
               </button>

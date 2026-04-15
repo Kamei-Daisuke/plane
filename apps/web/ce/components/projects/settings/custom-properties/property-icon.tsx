@@ -4,7 +4,7 @@
  * See the LICENSE file for details.
  */
 
-import { TextCursorInput } from "lucide-react";
+import { Plus } from "lucide-react";
 import { LUCIDE_ICONS_LIST } from "@plane/propel/emoji-icon-picker";
 
 type Props = {
@@ -18,12 +18,13 @@ type Props = {
  */
 export function PropertyIcon({ logoProps, size = 16, className }: Props) {
   if (!logoProps || !logoProps.in_use) {
-    return <TextCursorInput className={className} style={{ width: size, height: size }} />;
+    return <Plus className={`text-custom-text-400 ${className ?? ""}`} style={{ width: size, height: size }} />;
   }
 
   if (logoProps.in_use === "emoji") {
     const emoji = logoProps.emoji as { value?: string } | undefined;
-    if (!emoji?.value) return <TextCursorInput className={className} style={{ width: size, height: size }} />;
+    if (!emoji?.value)
+      return <Plus className={`text-custom-text-400 ${className ?? ""}`} style={{ width: size, height: size }} />;
     const codePoints = emoji.value.split("-").map((cp) => parseInt(cp, 10));
     const emojiStr = String.fromCodePoint(...codePoints);
     return (
@@ -35,7 +36,8 @@ export function PropertyIcon({ logoProps, size = 16, className }: Props) {
 
   if (logoProps.in_use === "icon") {
     const icon = logoProps.icon as { name?: string; color?: string } | undefined;
-    if (!icon?.name) return <TextCursorInput className={className} style={{ width: size, height: size }} />;
+    if (!icon?.name)
+      return <Plus className={`text-custom-text-400 ${className ?? ""}`} style={{ width: size, height: size }} />;
 
     const lucideIcon = LUCIDE_ICONS_LIST.find((item) => item.name === icon.name);
     if (lucideIcon) {
@@ -43,16 +45,8 @@ export function PropertyIcon({ logoProps, size = 16, className }: Props) {
       return <LucideEl style={{ color: icon.color, width: size, height: size }} className={className} />;
     }
 
-    // Fallback: try rendering as Material Symbols (may not display if font isn't loaded)
-    return (
-      <span
-        className={`material-symbols-rounded ${className ?? ""}`}
-        style={{ fontSize: size, color: icon.color, lineHeight: 1 }}
-      >
-        {icon.name}
-      </span>
-    );
+    return <Plus className={`text-custom-text-400 ${className ?? ""}`} style={{ width: size, height: size }} />;
   }
 
-  return <TextCursorInput className={className} style={{ width: size, height: size }} />;
+  return <Plus className={`text-custom-text-400 ${className ?? ""}`} style={{ width: size, height: size }} />;
 }

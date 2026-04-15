@@ -27,22 +27,51 @@ export type TWorkItemAdditionalSidebarProperties = {
 export const WorkItemAdditionalSidebarProperties: FC<TWorkItemAdditionalSidebarProperties> = observer(
   function WorkItemAdditionalSidebarProperties(props) {
     const { workItemId, workItemTypeId, projectId, workspaceSlug, isEditable } = props;
-    const { propertiesByIssueType, valuesByIssue, fetchProperties, fetchPropertyValues, upsertPropertyValues } =
-      useIssueProperty();
+    const {
+      propertiesByIssueType,
+      valuesByIssue,
+      fetchProperties,
+      fetchPropertyValues,
+      upsertPropertyValues,
+      issueTypesByProject,
+      fetchProjectIssueTypes,
+    } = useIssueProperty();
     const {
       project: { fetchProjectMembers },
     } = useMember();
 
-    const properties = workItemTypeId ? (propertiesByIssueType[workItemTypeId] ?? []) : [];
-    const activeProperties = properties.filter((p) => p.is_active);
+    // If workItemTypeId is set, use it directly. Otherwise, aggregate from all project issue types.
+    const projectIssueTypes = issueTypesByProject[projectId] ?? [];
+    const resolvedTypeIds = workItemTypeId ? [workItemTypeId] : projectIssueTypes.map((it) => it.id);
+    const properties = resolvedTypeIds.flatMap((tid) => propertiesByIssueType[tid] ?? []);
+    // Deduplicate by property id
+    const seenIds = new Set<string>();
+    const activeProperties = properties.filter((p) => {
+      if (!p.is_active || seenIds.has(p.id)) return false;
+      seenIds.add(p.id);
+      return true;
+    });
     const values = valuesByIssue[`${projectId}:${workItemId}`] ?? {};
 
     useEffect(() => {
       if (workItemTypeId) {
         fetchProperties(workspaceSlug, workItemTypeId);
+      } else {
+        // Fetch project issue types, then fetch properties for each
+        void fetchProjectIssueTypes(workspaceSlug, projectId).then((types) =>
+          Promise.all(types.map((t) => fetchProperties(workspaceSlug, t.id)))
+        );
       }
       fetchPropertyValues(workspaceSlug, projectId, workItemId);
-    }, [workItemTypeId, workItemId, projectId, workspaceSlug, fetchProperties, fetchPropertyValues]);
+    }, [
+      workItemTypeId,
+      workItemId,
+      projectId,
+      workspaceSlug,
+      fetchProperties,
+      fetchPropertyValues,
+      fetchProjectIssueTypes,
+    ]);
 
     useEffect(() => {
       if (!workspaceSlug || !projectId) return;
@@ -55,7 +84,7 @@ export const WorkItemAdditionalSidebarProperties: FC<TWorkItemAdditionalSidebarP
       fetchProjectMembers(workspaceSlug, projectId);
     }, [workspaceSlug, projectId, activeProperties, fetchProjectMembers]);
 
-    if (!workItemTypeId || activeProperties.length === 0) return <></>;
+    if (activeProperties.length === 0) return <></>;
 
     const handleChange = async (propertyId: string, value: unknown) => {
       if (!isEditable) return;
