@@ -114,3 +114,5 @@ build/
 .react-router/
 temp/
 scripts/
+jira_migrate_scripts/data/
+jira_migrate_scripts/_archive/
