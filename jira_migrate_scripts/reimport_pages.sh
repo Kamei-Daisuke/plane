@@ -25,6 +25,14 @@ echo "=== Step 2: Generate Y.js binaries ==="
 node jira_migrate_scripts/gen_binaries_final.js
 
 echo ""
+echo "=== Step 2.5: Verify binary roundtrip ==="
+node jira_migrate_scripts/verify_pages.js
+if [ $? -ne 0 ]; then
+  echo "ERROR: Content loss detected. Aborting."
+  exit 1
+fi
+
+echo ""
 echo "=== Step 3: Transfer to server ==="
 scp jira_migrate_scripts/data/page_final.jsonl jira_migrate_scripts/data/page_binaries.jsonl oci:/tmp/
 
