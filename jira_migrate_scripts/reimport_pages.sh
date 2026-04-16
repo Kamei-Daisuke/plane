@@ -18,7 +18,7 @@ set -e
 cd "$(dirname "$0")/.."
 
 echo "=== Step 1: Convert Confluence → TipTap HTML ==="
-python3 jira_migrate_scripts/convert_final.py
+python3 jira_migrate_scripts/convert_final_v2.py
 
 echo ""
 echo "=== Step 2: Generate Y.js binaries ==="
