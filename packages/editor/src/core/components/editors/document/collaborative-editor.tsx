@@ -139,7 +139,7 @@ function CollaborativeDocumentEditorInner(props: ICollaborativeDocumentEditorPro
 
 // Outer component that provides collaboration context
 function CollaborativeDocumentEditor(props: ICollaborativeDocumentEditorProps) {
-  const { id, realtimeConfig, serverHandler, user, cacheVersion } = props;
+  const { id, realtimeConfig, serverHandler, user } = props;
 
   const token = useMemo(() => JSON.stringify(user), [user]);
 
@@ -148,7 +148,6 @@ function CollaborativeDocumentEditor(props: ICollaborativeDocumentEditorProps) {
       docId={id}
       serverUrl={realtimeConfig.url}
       authToken={token}
-      cacheVersion={cacheVersion}
       onStateChange={serverHandler?.onStateChange}
     >
       <CollaborativeDocumentEditorInner {...props} />

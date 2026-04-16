@@ -7,8 +7,6 @@
 import { HocuspocusProvider } from "@hocuspocus/provider";
 // react
 import { useCallback, useEffect, useRef, useState } from "react";
-// indexeddb
-import { IndexeddbPersistence } from "y-indexeddb";
 // yjs
 import type * as Y from "yjs";
 // types
@@ -25,9 +23,6 @@ type UseYjsSetupArgs = {
   docId: string;
   serverUrl: string;
   authToken: string;
-  /** Server-side version of the binary (e.g. page.updated_at). When this changes,
-   *  the local IndexedDB cache is cleared before reconnecting. */
-  cacheVersion?: string;
   onStateChange?: (state: CollaborationState) => void;
   options?: {
     maxConnectionAttempts?: number;
@@ -36,48 +31,7 @@ type UseYjsSetupArgs = {
 
 const DEFAULT_MAX_RETRIES = 3;
 
-/** Clear IndexedDB cache for a document if the server version differs from the stored one. */
-const checkAndClearStaleCache = async (docId: string, cacheVersion?: string): Promise<void> => {
-  if (!cacheVersion) return;
-  const STORE_NAME = "plane-cache-versions";
-  try {
-    const idb = await new Promise<IDBDatabase>((resolve, reject) => {
-      const openReq = indexedDB.open(STORE_NAME, 1);
-      openReq.addEventListener("upgradeneeded", () => {
-        const store = openReq.result;
-        if (!store.objectStoreNames.contains("versions")) {
-          store.createObjectStore("versions");
-        }
-      });
-      openReq.addEventListener("success", () => resolve(openReq.result));
-      openReq.addEventListener("error", () => reject(openReq.error));
-    });
-    const tx = idb.transaction("versions", "readwrite");
-    const store = tx.objectStore("versions");
-    const stored = await new Promise<string | undefined>((resolve) => {
-      const getReq = store.get(docId);
-      getReq.addEventListener("success", () => resolve(getReq.result as string | undefined));
-      getReq.addEventListener("error", () => resolve(undefined));
-    });
-    if (stored !== cacheVersion) {
-      // Server binary changed (or first visit with cacheVersion) — delete stale Y.js IndexedDB
-      await new Promise<void>((resolve) => {
-        const delReq = indexedDB.deleteDatabase(docId);
-        delReq.addEventListener("success", () => resolve());
-        delReq.addEventListener("error", () => resolve());
-        delReq.addEventListener("blocked", () => resolve());
-      });
-    }
-    // Store the current version
-    const writeTx = idb.transaction("versions", "readwrite");
-    writeTx.objectStore("versions").put(cacheVersion, docId);
-    idb.close();
-  } catch {
-    // Non-fatal — if we can't check, just proceed normally
-  }
-};
-
-export const useYjsSetup = ({ docId, serverUrl, authToken, cacheVersion, onStateChange }: UseYjsSetupArgs) => {
+export const useYjsSetup = ({ docId, serverUrl, authToken, onStateChange }: UseYjsSetupArgs) => {
   // Current collaboration stage
   const [stage, setStage] = useState<CollabStage>({ kind: "initial" });
 
@@ -311,43 +265,15 @@ export const useYjsSetup = ({ docId, serverUrl, authToken, cacheVersion, onState
     };
   }, [docId, serverUrl, authToken]);
 
-  // IndexedDB persistence lifecycle
+  // IndexedDB persistence disabled — always fetch from server.
+  // The IndexedDB cache caused document bloat when stale Y.js documents
+  // merged with the server document on reconnect.
   useEffect(() => {
     if (!yjsSession) return;
-
-    let idbPersistence: IndexeddbPersistence | null = null;
-    let disposed = false;
-
-    const setup = async () => {
-      // Clear stale cache if server binary version changed
-      await checkAndClearStaleCache(docId, cacheVersion);
-      if (disposed) return;
-
-      idbPersistence = new IndexeddbPersistence(docId, yjsSession.provider.document);
-
-      const onIdbSynced = () => {
-        const yFragment = idbPersistence!.doc.getXmlFragment("default");
-        const docLength = yFragment?.length ?? 0;
-        setIsCacheReady(true);
-        setHasCachedContent(docLength > 0);
-      };
-
-      idbPersistence.on("synced", onIdbSynced);
-    };
-
-    setup();
-
-    return () => {
-      disposed = true;
-      if (idbPersistence) {
-        try {
-          idbPersistence.destroy();
-        } catch (error) {
-          console.error(`Error destroying local provider:`, error);
-        }
-      }
-    };
-  }, [docId, yjsSession, cacheVersion]);
+    // Mark cache as ready immediately (no local data)
+    setIsCacheReady(true);
+    setHasCachedContent(false);
+  }, [yjsSession]);
 
   // Observe Y.Doc content changes to update hasCachedContent (catches fallback scenario)
   useEffect(() => {

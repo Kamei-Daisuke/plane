@@ -295,7 +295,6 @@ export const PageEditorBody = observer(function PageEditorBody(props: Props) {
             onAssetChange={updateAssetsList}
             extendedEditorProps={extendedEditorProps}
             isFetchingFallbackBinary={isFetchingFallbackBinary}
-            cacheVersion={page.updated_at?.toString()}
           />
         </div>
       </div>
