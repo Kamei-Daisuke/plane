@@ -91,7 +91,8 @@ const storeDocument = async ({
         return;
       }
     } catch (guardError) {
-      logger.warn(`Guard check failed for ${pageId}, allowing save:`, guardError);
+      logger.warn(`Guard check failed for ${pageId}, rejecting save to prevent bloat:`, guardError);
+      return;
     }
 
     // convert binary data to all formats
