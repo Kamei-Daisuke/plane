@@ -160,6 +160,7 @@ from .issue.property import (
     IssuePropertyValueEndpoint,
     ProjectPropertyValuesBulkEndpoint,
     ProjectIssueTypeListView,
+    WorkspaceIssueTypeViewSet,
 )
 
 from .issue.worklog import IssueWorklogViewSet

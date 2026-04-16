@@ -19,6 +19,40 @@ export class IssuePropertyService extends APIService {
     super(API_BASE_URL);
   }
 
+  // ── Workspace issue types (CRUD) ──────────────────────────────────────
+
+  async getWorkspaceIssueTypes(workspaceSlug: string): Promise<TIssueType[]> {
+    return this.get(`/api/workspaces/${workspaceSlug}/issue-types/`)
+      .then((r) => r?.data)
+      .catch((e) => {
+        throw e?.response?.data;
+      });
+  }
+
+  async createIssueType(workspaceSlug: string, data: Partial<TIssueType>): Promise<TIssueType> {
+    return this.post(`/api/workspaces/${workspaceSlug}/issue-types/`, data)
+      .then((r) => r?.data)
+      .catch((e) => {
+        throw e?.response?.data;
+      });
+  }
+
+  async updateIssueType(workspaceSlug: string, issueTypeId: string, data: Partial<TIssueType>): Promise<TIssueType> {
+    return this.patch(`/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/`, data)
+      .then((r) => r?.data)
+      .catch((e) => {
+        throw e?.response?.data;
+      });
+  }
+
+  async deleteIssueType(workspaceSlug: string, issueTypeId: string): Promise<void> {
+    return this.delete(`/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/`)
+      .then((r) => r?.data)
+      .catch((e) => {
+        throw e?.response?.data;
+      });
+  }
+
   // ── Project issue types ───────────────────────────────────────────────
 
   async getProjectIssueTypes(workspaceSlug: string, projectId: string): Promise<TIssueType[]> {
@@ -45,7 +79,10 @@ export class IssuePropertyService extends APIService {
     issueTypeId: string,
     data: Partial<TIssueTypeProperty>
   ): Promise<TIssueTypeProperty> {
-    return this.post(`/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/properties/?project_id=${projectId}`, data)
+    return this.post(
+      `/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/properties/?project_id=${projectId}`,
+      data
+    )
       .then((r) => r?.data)
       .catch((e) => {
         throw e?.response?.data;
@@ -69,7 +106,12 @@ export class IssuePropertyService extends APIService {
       });
   }
 
-  async deleteProperty(workspaceSlug: string, projectId: string, issueTypeId: string, propertyId: string): Promise<void> {
+  async deleteProperty(
+    workspaceSlug: string,
+    projectId: string,
+    issueTypeId: string,
+    propertyId: string
+  ): Promise<void> {
     return this.delete(
       `/api/workspaces/${workspaceSlug}/issue-types/${issueTypeId}/properties/${propertyId}/?project_id=${projectId}`
     )

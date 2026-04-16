@@ -46,9 +46,21 @@ ssh oci "sudo docker cp /tmp/page_final.jsonl compose-parse-auxiliary-protocol-d
 ssh oci "sudo docker exec compose-parse-auxiliary-protocol-dxi2hz-api-1 python manage.py shell -c \"exec(open('/tmp/update_html_fixed.py').read())\""
 
 echo ""
+echo "=== Step 5.5: Resolve page links (data-page-id → real URL) ==="
+scp jira_migrate_scripts/fix_page_links.py oci:/tmp/
+ssh oci "sudo docker cp /tmp/fix_page_links.py compose-parse-auxiliary-protocol-dxi2hz-api-1:/tmp/"
+ssh oci "sudo docker exec compose-parse-auxiliary-protocol-dxi2hz-api-1 python manage.py shell -c \"exec(open('/tmp/fix_page_links.py').read())\""
+
+echo ""
 echo "=== Step 6: Update binaries in DB ==="
 ssh oci "sudo docker cp /tmp/page_binaries.jsonl compose-parse-auxiliary-protocol-dxi2hz-api-1:/tmp/"
 ssh oci "sudo docker exec compose-parse-auxiliary-protocol-dxi2hz-api-1 python manage.py shell -c \"exec(open('/tmp/import_binaries.py').read())\""
+
+echo ""
+echo "=== Step 6.5: Health check (before live restart) ==="
+scp jira_migrate_scripts/health_check_pages.py oci:/tmp/
+ssh oci "sudo docker cp /tmp/health_check_pages.py compose-parse-auxiliary-protocol-dxi2hz-api-1:/tmp/"
+ssh oci "sudo docker exec compose-parse-auxiliary-protocol-dxi2hz-api-1 python manage.py shell -c \"exec(open('/tmp/health_check_pages.py').read())\""
 
 echo ""
 echo "=== Step 7: Start live ==="

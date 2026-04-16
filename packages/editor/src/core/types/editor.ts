@@ -208,6 +208,8 @@ export type ICollaborativeDocumentEditorProps = Omit<IEditorProps, "initialValue
   pageRestorationInProgress?: boolean;
   titleRef?: React.MutableRefObject<EditorTitleRefApi | null>;
   isFetchingFallbackBinary?: boolean;
+  /** Server-side cache version (e.g. page.updated_at). When changed, stale IndexedDB cache is cleared. */
+  cacheVersion?: string;
 };
 
 export type IDocumentEditorProps = Omit<IEditorProps, "initialValue" | "onEnterKeyPress" | "value"> & {

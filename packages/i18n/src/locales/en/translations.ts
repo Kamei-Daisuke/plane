@@ -1577,6 +1577,23 @@ export default {
           },
         },
       },
+      issue_types: {
+        title: "Issue Types",
+        heading: "Issue Types",
+        description: "Manage the issue types available in your workspace.",
+        add_type: "Add issue type",
+        name_label: "Name",
+        name_placeholder: "e.g. Bug, Story, Task",
+        save: "Save",
+        cancel: "Cancel",
+        delete_confirm: "Are you sure you want to delete this issue type?",
+        toasts: {
+          created: "Issue type created",
+          updated: "Issue type updated",
+          deleted: "Issue type deleted",
+          error: "Something went wrong. Please try again.",
+        },
+      },
       api_tokens: {
         title: "Personal Access Tokens",
         add_token: "Add personal access token",

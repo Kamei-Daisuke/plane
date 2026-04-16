@@ -10,6 +10,12 @@ with open('jira_migrate_scripts/data/page_asset_map.json') as f:
     asset_map = json.load(f)
 with open('jira_migrate_scripts/data/page_map.json') as f:
     page_map = json.load(f)
+with open('jira_migrate_scripts/data/title_to_plane_id.json', encoding='utf-8') as f:
+    title_to_plane = json.load(f)
+with open('jira_migrate_scripts/data/title_stripped_to_plane_id.json', encoding='utf-8') as f:
+    title_stripped_to_plane = json.load(f)
+with open('jira_migrate_scripts/data/page_to_project.json') as f:
+    page_to_project = json.load(f)
 
 
 def confluence_to_tiptap(xhtml):
@@ -76,6 +82,18 @@ def confluence_to_tiptap(xhtml):
             return f'<a href="{url_m.group(1)}" target="_blank" rel="noopener noreferrer nofollow">{t}</a>'
         if page_m:
             t = text or page_m.group(1)
+            title_raw = page_m.group(1)
+            # Try exact title match, then stripped-HTML match
+            plane_id = title_to_plane.get(title_raw)
+            if not plane_id:
+                stripped = re.sub(r'<[^>]+>', '', title_raw).strip()
+                plane_id = title_stripped_to_plane.get(stripped)
+            if plane_id:
+                project_id = page_to_project.get(plane_id)
+                clean_text = re.sub(r'<[^>]+>', '', t).strip() or title_raw
+                if project_id:
+                    return f'<a href="https://plane.example.com/keis/projects/{project_id}/pages/{plane_id}/">{clean_text}</a>'
+                return f'<a data-page-id="{plane_id}">{clean_text}</a>'
             return f'[Page: {t}]'
         return text or ''
     h = re.sub(r'<ac:link[^>]*>(.*?)</ac:link>', replace_link, h, flags=re.DOTALL)
