@@ -105,6 +105,33 @@ def confluence_to_tiptap(xhtml):
     h = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', h, flags=re.DOTALL)
     h = re.sub(r'<ac:emoticon[^>]*/>', '', h)
 
+    # Table width: convert table style="width: X%" to colwidth on cells
+    EDITOR_WIDTH = 720  # Plane editor max-width in px
+    def fix_table_width(m):
+        table_tag = m.group(1)
+        table_body = m.group(2)
+        width_m = re.search(r'width:\s*([\d.]+)%', table_tag)
+        if not width_m:
+            return m.group(0)
+        table_px = int(float(width_m.group(1)) / 100 * EDITOR_WIDTH)
+        # Count columns from first row
+        first_row = re.search(r'<tr[^>]*>(.*?)</tr>', table_body, re.DOTALL)
+        if not first_row:
+            return m.group(0)
+        num_cols = len(re.findall(r'<t[hd]', first_row.group(1)))
+        if num_cols == 0:
+            return m.group(0)
+        col_w = max(50, table_px // num_cols)
+        # Add colwidth to all th/td that don't already have it
+        def add_colwidth(cell_m):
+            tag = cell_m.group(0)
+            if 'colwidth' in tag:
+                return tag
+            return tag[:-1] + f' colwidth="{col_w}">'
+        new_body = re.sub(r'<(t[hd])([^>]*)>', add_colwidth, table_body)
+        return f'<table>{new_body}</table>'
+    h = re.sub(r'<table([^>]*)>(.*?)</table>', fix_table_width, h, flags=re.DOTALL)
+
     # TipTap format
     h = re.sub(r'<hr\s*/?>', '<div class="py-4 border-strong-1" data-type="horizontalRule"><div></div></div>', h)
 

@@ -59,8 +59,8 @@ const checkAndClearStaleCache = async (docId: string, cacheVersion?: string): Pr
       getReq.addEventListener("success", () => resolve(getReq.result as string | undefined));
       getReq.addEventListener("error", () => resolve(undefined));
     });
-    if (stored && stored !== cacheVersion) {
-      // Server binary changed — delete the stale Y.js IndexedDB database
+    if (stored !== cacheVersion) {
+      // Server binary changed (or first visit with cacheVersion) — delete stale Y.js IndexedDB
       await new Promise<void>((resolve) => {
         const delReq = indexedDB.deleteDatabase(docId);
         delReq.addEventListener("success", () => resolve());
