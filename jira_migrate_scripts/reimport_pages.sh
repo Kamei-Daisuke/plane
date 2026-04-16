@@ -42,7 +42,9 @@ ssh oci "sudo docker stop compose-parse-auxiliary-protocol-dxi2hz-live-1 2>/dev/
 
 echo ""
 echo "=== Step 5: Update HTML in DB ==="
+scp jira_migrate_scripts/update_html_fixed.py oci:/tmp/
 ssh oci "sudo docker cp /tmp/page_final.jsonl compose-parse-auxiliary-protocol-dxi2hz-api-1:/tmp/page_updates_tiptap_fixed.jsonl"
+ssh oci "sudo docker cp /tmp/update_html_fixed.py compose-parse-auxiliary-protocol-dxi2hz-api-1:/tmp/"
 ssh oci "sudo docker exec compose-parse-auxiliary-protocol-dxi2hz-api-1 python manage.py shell -c \"exec(open('/tmp/update_html_fixed.py').read())\""
 
 echo ""
@@ -53,7 +55,9 @@ ssh oci "sudo docker exec compose-parse-auxiliary-protocol-dxi2hz-api-1 python m
 
 echo ""
 echo "=== Step 6: Update binaries in DB ==="
+scp jira_migrate_scripts/import_binaries.py oci:/tmp/
 ssh oci "sudo docker cp /tmp/page_binaries.jsonl compose-parse-auxiliary-protocol-dxi2hz-api-1:/tmp/"
+ssh oci "sudo docker cp /tmp/import_binaries.py compose-parse-auxiliary-protocol-dxi2hz-api-1:/tmp/"
 ssh oci "sudo docker exec compose-parse-auxiliary-protocol-dxi2hz-api-1 python manage.py shell -c \"exec(open('/tmp/import_binaries.py').read())\""
 
 echo ""
@@ -63,9 +67,14 @@ ssh oci "sudo docker cp /tmp/health_check_pages.py compose-parse-auxiliary-proto
 ssh oci "sudo docker exec compose-parse-auxiliary-protocol-dxi2hz-api-1 python manage.py shell -c \"exec(open('/tmp/health_check_pages.py').read())\""
 
 echo ""
-echo "=== Step 7: Start live ==="
-ssh oci "sudo docker start compose-parse-auxiliary-protocol-dxi2hz-live-1"
-
+echo "=== Step 7: ユーザ対応（手動） ==="
+echo "live は停止したままです。以下を実施してから Step 8 を実行してください:"
 echo ""
-echo "=== Done ==="
-echo "ブラウザのサイトデータ (plane.example.com) を削除してから確認してください"
+echo "  1. 全ユーザに通知: plane.example.com のサイトデータ（IndexedDB）を削除"
+echo "     Chrome: 設定 > プライバシーとセキュリティ > サイトの設定 > plane.example.com > データを削除"
+echo "  2. 全ユーザが削除完了したことを確認"
+echo "  3. 以下を実行:"
+echo ""
+echo "     ssh oci 'sudo docker exec compose-parse-auxiliary-protocol-dxi2hz-plane-redis-1 valkey-cli FLUSHALL && sudo docker start compose-parse-auxiliary-protocol-dxi2hz-live-1'"
+echo ""
+echo "=== Done (live は手動で起動してください) ==="
