@@ -90,8 +90,8 @@ const storeDocument = async ({
         );
         return;
       }
-    } catch {
-      // If we can't fetch existing binary, proceed with save
+    } catch (guardError) {
+      logger.warn(`Guard check failed for ${pageId}, allowing save:`, guardError);
     }
 
     // convert binary data to all formats
