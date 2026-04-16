@@ -30,6 +30,8 @@ with open('jira_migrate_scripts/data/title_stripped_to_plane_id.json', encoding=
     title_stripped_to_plane = json.load(f)
 with open('jira_migrate_scripts/data/page_to_project.json') as f:
     page_to_project = json.load(f)
+with open('jira_migrate_scripts/data/jira_key_to_plane_url.json') as f:
+    jira_key_to_plane_url = json.load(f)
 
 
 def _text(el):
@@ -342,8 +344,56 @@ def _convert_table(el):
     return f'<table>{inner}</table>'
 
 
+def _replace_atlassian_urls(html):
+    """Replace Confluence wiki URLs and Jira URLs with Plane URLs."""
+    def _replace_confluence_url(m):
+        url = m.group(0)
+        # Extract page ID from /pages/12345 pattern
+        page_id_m = re.search(r'/pages/(\d+)', url)
+        if page_id_m:
+            cid = page_id_m.group(1)
+            plane_id = page_map.get(cid)
+            if plane_id:
+                project_id = page_to_project.get(plane_id)
+                if project_id:
+                    return f'https://plane.example.com/keis/projects/{project_id}/pages/{plane_id}/'
+        # URL with space key + page title (display format)
+        display_m = re.search(r'/wiki/display/([^/]+)/(.+?)(?:\?|#|$)', url)
+        if display_m:
+            # Try to find by title
+            from urllib.parse import unquote
+            title = unquote(display_m.group(2)).replace('+', ' ')
+            plane_id = title_to_plane.get(title)
+            if plane_id:
+                project_id = page_to_project.get(plane_id)
+                if project_id:
+                    return f'https://plane.example.com/keis/projects/{project_id}/pages/{plane_id}/'
+        return url  # keep original if unresolvable
+
+    # Replace Confluence wiki URLs
+    html = re.sub(r'https?://aruhi-corp\.atlassian\.net/wiki/[^"<\s]+', _replace_confluence_url, html)
+
+    # Replace Jira URLs: /browse/PROJ-123, /projects/PROJ/...
+    def _replace_jira_url(m):
+        url = m.group(0)
+        # /browse/PROJ-123
+        browse_m = re.search(r'/browse/([A-Z]+-\d+)', url)
+        if browse_m:
+            plane_url = jira_key_to_plane_url.get(browse_m.group(1))
+            if plane_url:
+                return plane_url
+        return url
+    html = re.sub(r'https?://aruhi-corp\.atlassian\.net/(?:browse|secure)/[^"<\s]+', _replace_jira_url, html)
+    # /projects/PROJ/summary -> workspace project page
+    html = re.sub(r'https?://aruhi-corp\.atlassian\.net/projects/[^"<\s]+', _replace_jira_url, html)
+
+    return html
+
+
 def _clean_html(html):
-    """Post-process: remove empty paragraphs, normalize whitespace."""
+    """Post-process: remove empty paragraphs, normalize whitespace, replace old URLs."""
+    # Replace Confluence/Jira URLs
+    html = _replace_atlassian_urls(html)
     # Remove empty paragraphs
     html = re.sub(rf'<p class="{P}"><br\s*/?></p>', '', html)
     html = re.sub(rf'<p class="{P}"></p>', '', html)
