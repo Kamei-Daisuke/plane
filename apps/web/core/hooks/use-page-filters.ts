@@ -18,7 +18,7 @@ export type TPagesPersonalizationConfig = {
 };
 
 const DEFAULT_PERSONALIZATION_VALUES: TPagesPersonalizationConfig = {
-  full_width: false,
+  full_width: true,
   font_size: "large-font",
   font_style: "sans-serif",
   sticky_toolbar: true,
@@ -26,8 +26,10 @@ const DEFAULT_PERSONALIZATION_VALUES: TPagesPersonalizationConfig = {
 
 export const usePageFilters = () => {
   // local storage
+  // v2 key: bumped to force-reset existing localStorage so every user picks up
+  // the new default (full_width: true) instead of their stale saved value.
   const { storedValue: pagesConfig, setValue: setPagesConfig } = useLocalStorage<TPagesPersonalizationConfig>(
-    "pages_config",
+    "pages_config_v2",
     DEFAULT_PERSONALIZATION_VALUES
   );
   // stored values
