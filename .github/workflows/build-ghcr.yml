@@ -185,11 +185,15 @@ jobs:
     needs: [manifest]
     runs-on: [self-hosted, keis-oci]
     steps:
-      - name: Trigger Dokploy compose redeploy
+      - name: Pull fresh images and recreate changed services
+        env:
+          PROJECT: compose-parse-auxiliary-protocol-dxi2hz
+          COMPOSE_FILE: /etc/dokploy/compose/compose-parse-auxiliary-protocol-dxi2hz/code/docker-compose.yml
         run: |
-          curl -sf "http://localhost:3000/api/compose.deploy" \
-            -X POST \
-            -H "x-api-key: ${{ secrets.DOKPLOY_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d '{"composeId":"katBqCyfrdUthM-BBLa50"}'
-          echo "Dokploy redeploy triggered"
+          # Dokploy's compose.deploy only runs `docker compose up -d --build`,
+          # which does not pull newer images when the tag is unchanged. Pull
+          # first, then `up -d` without --force-recreate so only services whose
+          # image digest actually changed get recreated.
+          sudo docker compose -p "$PROJECT" -f "$COMPOSE_FILE" pull web live admin api
+          sudo docker compose -p "$PROJECT" -f "$COMPOSE_FILE" up -d --no-deps web live admin api
+          echo "Changed services recreated with freshly pulled images"
