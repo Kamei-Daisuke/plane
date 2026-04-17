@@ -28,12 +28,17 @@ from plane.db.models import Issue, IssueComment, Page, Project, ProjectPage
 
 # === Build mappings ===
 
-# Jira key -> Plane URL
+# Jira key -> Plane URL  AND  Jira internal ID -> Plane URL
 key_to_url = {}
-for issue in Issue.objects.filter(deleted_at__isnull=True, external_source="jira").select_related("project").only("id", "sequence_id", "project__identifier"):
+jira_id_to_url = {}
+for issue in Issue.objects.filter(deleted_at__isnull=True, external_source="jira").select_related("project").only("id", "sequence_id", "project__identifier", "external_id"):
     key = f"{issue.project.identifier}-{issue.sequence_id}"
-    key_to_url[key] = f"https://plane.example.com/keis/browse/{key}/"
+    plane_url = f"https://plane.example.com/keis/browse/{key}/"
+    key_to_url[key] = plane_url
+    if issue.external_id:
+        jira_id_to_url[issue.external_id] = plane_url
 print(f"Jira key mappings: {len(key_to_url)}")
+print(f"Jira internal ID mappings: {len(jira_id_to_url)}")
 
 # Confluence page ID -> Plane page URL
 # Load page_map from file if available, otherwise build from external_id
@@ -124,6 +129,23 @@ def replace_all_old_urls(html):
     html = re.sub(
         r'https?://confluence\.aruhi-corp\.co\.jp/pages/viewpage\.action\?[^"<\s>]+',
         _repl_confluence_viewpage,
+        html,
+    )
+
+    # 4b. Jira AddComment URL that references an issue by its internal id.
+    # Example: https://jira.aruhi-corp.co.jp/secure/AddComment!default.jspa?id=31647
+    # We rewrite to the Plane issue page so the link lands on something useful.
+    def _repl_jira_addcomment(m):
+        url = m.group(0)
+        jid_m = re.search(r"[?&]id=(\d+)", url)
+        if jid_m:
+            plane_url = jira_id_to_url.get(jid_m.group(1))
+            if plane_url:
+                return plane_url
+        return url
+    html = re.sub(
+        r'https?://jira\.aruhi-corp\.co\.jp/secure/AddComment![^\s"<>]+',
+        _repl_jira_addcomment,
         html,
     )
 
