@@ -140,13 +140,13 @@ export const useYjsSetup = ({ docId, serverUrl, authToken, onStateChange }: UseY
       if (isDisposedRef.current) return;
 
       const closeCode = closeEvent.event?.code;
-      const closeReason = closeEvent.event?.reason;
 
-      // Server signaled corruption (e.g. after a bulk reimport). Force a full
-      // reload so the browser drops its in-memory Y.Doc and refetches from the
-      // server — otherwise the stale client state would merge back and re-bloat
-      // the document.
-      if (closeCode === 4000 && closeReason === "corruption_detected") {
+      // Admin-initiated FORCE_CLOSE (code 4000) — always reload. During the
+      // active data migration we use this to evict clients whose in-memory
+      // Y.Doc may be out of sync with the freshly reimported server state.
+      // A reload drops the stale Y.Doc and refetches from the server, so the
+      // client's state cannot merge back and re-bloat the document.
+      if (closeCode === 4000) {
         window.location.reload();
         return;
       }

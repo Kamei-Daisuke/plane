@@ -82,6 +82,21 @@ export class ForceCloseHandler implements Extension {
       });
 
       logger.info(`[FORCE_CLOSE_HANDLER] Closed ${closed}/${connectionCount} connections for ${docId}`);
+
+      // Wait for connections to drain, then unload the document from memory so
+      // subsequent connections re-hydrate from the DB (not the stale in-memory
+      // Y.Doc). The onStoreDocument bloat guard in database.ts protects against
+      // a bloated in-memory state being persisted on unload.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      try {
+        await instance.unloadDocument(document);
+        logger.info(`[FORCE_CLOSE_HANDLER] Unloaded document ${docId} from memory`);
+      } catch (unloadError: unknown) {
+        logger.error(
+          `[FORCE_CLOSE_HANDLER] Failed to unload document ${docId}:`,
+          unloadError instanceof Error ? unloadError.message : unloadError
+        );
+      }
     });
 
     logger.info("[FORCE_CLOSE_HANDLER] Registered with Redis extension");
