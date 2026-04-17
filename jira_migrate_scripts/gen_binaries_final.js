@@ -5,6 +5,11 @@ const { getBinaryDataFromDocumentEditorHTMLString } = require(
   path.resolve(__dirname, "../packages/editor/dist/lib.js")
 );
 async function main() {
+  // Load page titles for Y.js title field
+  const titlesPath = path.resolve(__dirname, "data/page_titles.json");
+  const titles = fs.existsSync(titlesPath) ? JSON.parse(fs.readFileSync(titlesPath, "utf-8")) : {};
+  process.stderr.write("Loaded " + Object.keys(titles).length + " titles\n");
+
   const input = fs.createReadStream(path.resolve(__dirname, "data/page_final.jsonl"), "utf-8");
   const rl = readline.createInterface({ input, crlfDelay: Infinity });
   const out = fs.createWriteStream(path.resolve(__dirname, "data/page_binaries.jsonl"), "utf-8");
@@ -15,7 +20,8 @@ async function main() {
     if (!line.trim()) continue;
     try {
       const { id, html } = JSON.parse(line);
-      const binary = getBinaryDataFromDocumentEditorHTMLString(html);
+      const title = titles[id] || undefined;
+      const binary = getBinaryDataFromDocumentEditorHTMLString(html, title);
       if (binary.length < 100 && html.length > 1000) {
         small++;
         if (small <= 5) process.stderr.write("SMALL: " + id + " html=" + html.length + " bin=" + binary.length + "\n");
