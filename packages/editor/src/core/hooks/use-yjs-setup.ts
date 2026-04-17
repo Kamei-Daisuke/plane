@@ -142,6 +142,17 @@ export const useYjsSetup = ({ docId, serverUrl, authToken, onStateChange }: UseY
       if (isDisposedRef.current) return;
 
       const closeCode = closeEvent.event?.code;
+      const closeReason = closeEvent.event?.reason;
+
+      // Server signaled corruption (e.g. after a bulk reimport). Force a full
+      // reload so the browser drops its in-memory Y.Doc and refetches from the
+      // server — otherwise the stale client state would merge back and re-bloat
+      // the document.
+      if (closeCode === 4000 && closeReason === "corruption_detected") {
+        window.location.reload();
+        return;
+      }
+
       const wsProvider = provider.configuration.websocketProvider;
       const shouldConnect = wsProvider.shouldConnect;
       const isForcedClose = isForcedCloseCode(closeCode) || forcedCloseSignalRef.current || shouldConnect === false;
