@@ -70,7 +70,6 @@ type Props = {
   storeType: EPageStoreType;
   customRealtimeEventHandlers?: TCustomEventHandlers;
   extendedEditorProps: TExtendedEditorExtensionsConfig;
-  isFetchingFallbackBinary?: boolean;
   onCollaborationStateChange?: (state: CollaborationState) => void;
 };
 
@@ -88,7 +87,6 @@ export const PageEditorBody = observer(function PageEditorBody(props: Props) {
     projectId,
     workspaceSlug,
     extendedEditorProps,
-    isFetchingFallbackBinary,
     onCollaborationStateChange,
   } = props;
   // refs
@@ -295,7 +293,6 @@ export const PageEditorBody = observer(function PageEditorBody(props: Props) {
             }}
             onAssetChange={updateAssetsList}
             extendedEditorProps={extendedEditorProps}
-            isFetchingFallbackBinary={isFetchingFallbackBinary}
           />
         </div>
       </div>

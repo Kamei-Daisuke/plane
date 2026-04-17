@@ -53,7 +53,6 @@ function CollaborativeDocumentEditorInner(props: ICollaborativeDocumentEditorPro
     extendedDocumentEditorProps,
     titleRef,
     updatePageProperties,
-    isFetchingFallbackBinary,
   } = props;
 
   // Get non-null provider from context
@@ -96,9 +95,7 @@ function CollaborativeDocumentEditorInner(props: ICollaborativeDocumentEditorPro
   });
 
   // Show loader ONLY when cache is known empty and server hasn't synced yet
-  const shouldShowSyncLoader = state.isCacheReady && !state.hasCachedContent && !state.isServerSynced;
-  const shouldWaitForFallbackBinary = isFetchingFallbackBinary && !state.hasCachedContent && state.isServerDisconnected;
-  const isLoading = shouldShowSyncLoader || shouldWaitForFallbackBinary;
+  const isLoading = state.isCacheReady && !state.hasCachedContent && !state.isServerSynced;
 
   // Gate content rendering on isDocReady to prevent empty editor flash
   const showContentSkeleton = !state.isDocReady;
