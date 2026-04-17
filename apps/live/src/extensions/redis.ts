@@ -7,6 +7,7 @@
 import { Redis as HocuspocusRedis } from "@hocuspocus/extension-redis";
 import { OutgoingMessage } from "@hocuspocus/server";
 import type { onConfigurePayload } from "@hocuspocus/server";
+import type { Redis as IORedis } from "ioredis";
 import { logger } from "@plane/logger";
 import { AppError } from "@/lib/errors";
 import { redisManager } from "@/redis";
@@ -23,7 +24,12 @@ const getRedisClient = () => {
 
 export class Redis extends HocuspocusRedis {
   private adminHandlers = new Map<AdminCommand, AdminCommandHandler>();
-  private readonly ADMIN_CHANNEL = "hocuspocus:admin";
+  private readonly ADMIN_CHANNEL = "plane:admin";
+  // Dedicated subscriber for the admin channel. Sharing `this.sub` with the
+  // upstream HocuspocusRedis extension caused its `messageBuffer` handler to
+  // try to decode our JSON admin payloads as Y.js updates, producing a flood
+  // of "Invalid typed array length" unhandled rejections.
+  private adminSub?: IORedis;
 
   constructor() {
     super({ redis: getRedisClient() });
@@ -32,9 +38,12 @@ export class Redis extends HocuspocusRedis {
   async onConfigure(payload: onConfigurePayload) {
     await super.onConfigure(payload);
 
-    // Subscribe to admin channel
+    this.adminSub = getRedisClient().duplicate();
+
+    // Subscribe to admin channel on the dedicated client so our messages do
+    // not reach upstream's binary decoder.
     await new Promise<void>((resolve, reject) => {
-      this.sub.subscribe(this.ADMIN_CHANNEL, (error: Error) => {
+      this.adminSub!.subscribe(this.ADMIN_CHANNEL, (error: Error | null) => {
         if (error) {
           logger.error(`[Redis] Failed to subscribe to admin channel:`, error);
           reject(error);
@@ -46,7 +55,7 @@ export class Redis extends HocuspocusRedis {
     });
 
     // Listen for admin messages
-    this.sub.on("message", this.handleAdminMessage);
+    this.adminSub.on("message", this.handleAdminMessage);
     logger.info(`[Redis] Attached admin message listener`);
   }
 
@@ -102,19 +111,20 @@ export class Redis extends HocuspocusRedis {
   }
 
   async onDestroy() {
-    // Unsubscribe from admin channel
-    await new Promise<void>((resolve) => {
-      this.sub.unsubscribe(this.ADMIN_CHANNEL, (error: Error) => {
-        if (error) {
-          logger.error(`[Redis] Error unsubscribing from admin channel:`, error);
-        }
-        resolve();
+    if (this.adminSub) {
+      await new Promise<void>((resolve) => {
+        this.adminSub!.unsubscribe(this.ADMIN_CHANNEL, (error: Error | null) => {
+          if (error) {
+            logger.error(`[Redis] Error unsubscribing from admin channel:`, error);
+          }
+          resolve();
+        });
       });
-    });
-
-    // Remove the message listener to prevent memory leaks
-    this.sub.removeListener("message", this.handleAdminMessage);
-    logger.info(`[Redis] Removed admin message listener`);
+      this.adminSub.removeListener("message", this.handleAdminMessage);
+      this.adminSub.disconnect();
+      this.adminSub = undefined;
+      logger.info(`[Redis] Removed admin message listener`);
+    }
 
     await super.onDestroy();
   }
