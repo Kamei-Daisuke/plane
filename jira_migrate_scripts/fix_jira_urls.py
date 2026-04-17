@@ -1,11 +1,21 @@
 """Replace old Jira/Confluence URLs with Plane URLs in issues, comments, and pages.
 
+Handles both the Atlassian Cloud URLs (aruhi-corp.atlassian.net) AND the
+on-premise hosts (jira.aruhi-corp.co.jp, confluence.aruhi-corp.co.jp) that
+the current migration data actually contains.
+
 Targets:
-  - jira.aruhi-corp.co.jp/browse/PROJ-123 → plane.example.com/keis/browse/PROJ-123/
-  - aruhi-corp.atlassian.net/browse/PROJ-123 → same
-  - aruhi-corp.atlassian.net/wiki/pages/ID → Plane page URL
-  - aruhi-corp.atlassian.net/wiki/display/SPACE/Title → Plane page URL
-  - aruhi-corp.atlassian.net/wiki/spaces/SPACE/pages/ID/Title → Plane page URL
+  - jira.aruhi-corp.co.jp/browse/PROJ-123                        → Plane issue URL
+  - aruhi-corp.atlassian.net/browse/PROJ-123                     → Plane issue URL
+  - aruhi-corp.atlassian.net/wiki/.../pages/ID/...               → Plane page URL
+  - aruhi-corp.atlassian.net/wiki/display/SPACE/Title            → Plane page URL
+  - confluence.aruhi-corp.co.jp/pages/viewpage.action?pageId=ID  → Plane page URL
+  - confluence.aruhi-corp.co.jp/display/SPACE/Title              → Plane page URL
+
+Unresolvable URLs (admin pages, deleted Jira tickets, attachments without a
+Plane FileAsset map) are left untouched. `download/attachments/*` is not
+converted because we do not yet have a Confluence-attachment-to-Plane-asset
+mapping.
 
 Run inside Plane API container:
   python manage.py shell -c "exec(open('/tmp/fix_jira_urls.py').read())"
@@ -77,23 +87,65 @@ def replace_all_old_urls(html):
         return key_to_url.get(key, m.group(0))
     html = re.sub(r'https?://aruhi-corp\.atlassian\.net/browse/([A-Z][A-Z0-9]+-\d+)', _repl_atlassian_browse, html)
 
-    # 3. aruhi-corp.atlassian.net/wiki/.../pages/ID/...
+    # 3. aruhi-corp.atlassian.net/wiki/.../pages/ID/...  (Cloud Confluence)
     def _repl_confluence_url(m):
         url = m.group(0)
-        page_id_m = re.search(r'/pages/(\d+)', url)
+        # Cloud viewpage.action format: /wiki/pages/viewpage.action?pageId=<ID>
+        pageid_qs = re.search(r"[?&]pageId=(\d+)", url)
+        if pageid_qs:
+            plane_url = page_id_to_url.get(pageid_qs.group(1))
+            if plane_url:
+                return plane_url
+        # Cloud path format: /wiki/.../pages/<ID>/...
+        page_id_m = re.search(r"/pages/(\d+)(?:/|$|[?#])", url)
         if page_id_m:
             plane_url = page_id_to_url.get(page_id_m.group(1))
             if plane_url:
                 return plane_url
-        # Try display format: /wiki/display/SPACE/Title
+        # Cloud display format: /wiki/display/SPACE/Title
         display_m = re.search(r'/wiki/display/[^/]+/(.+?)(?:\?|#|"|<|\s|$)', url)
         if display_m:
-            title = unquote(display_m.group(1)).replace('+', ' ')
+            title = unquote(display_m.group(1)).replace("+", " ")
             plane_url = title_to_url.get(title)
             if plane_url:
                 return plane_url
         return url
     html = re.sub(r'https?://aruhi-corp\.atlassian\.net/wiki/[^"<\s]+', _repl_confluence_url, html)
+
+    # 4. On-prem Confluence: confluence.aruhi-corp.co.jp/pages/viewpage.action?pageId=<ID>
+    def _repl_confluence_viewpage(m):
+        url = m.group(0)
+        page_id_m = re.search(r'[?&]pageId=(\d+)', url)
+        if page_id_m:
+            plane_url = page_id_to_url.get(page_id_m.group(1))
+            if plane_url:
+                return plane_url
+        return url
+    html = re.sub(
+        r'https?://confluence\.aruhi-corp\.co\.jp/pages/viewpage\.action\?[^"<\s>]+',
+        _repl_confluence_viewpage,
+        html,
+    )
+
+    # 5. On-prem Confluence: confluence.aruhi-corp.co.jp/display/<SPACE>/<TITLE>
+    def _repl_confluence_display(m):
+        url = m.group(0)
+        # Strip trailing punctuation that belongs to the surrounding text
+        # (Japanese 。, 、 etc. often get eaten by the greedy match).
+        url = url.rstrip(".,;。、")
+        display_m = re.search(r"/display/[^/]+/([^\"<\s>?#]+)", url)
+        if display_m:
+            raw = display_m.group(1)
+            title = unquote(raw).replace("+", " ")
+            plane_url = title_to_url.get(title)
+            if plane_url:
+                return plane_url
+        return m.group(0)
+    html = re.sub(
+        r'https?://confluence\.aruhi-corp\.co\.jp/display/[^"<\s>]+',
+        _repl_confluence_display,
+        html,
+    )
 
     return html
 
@@ -143,11 +195,17 @@ print(f"Fixed pages: {fixed_pages}")
 
 # === Verify ===
 
-cursor.execute("SELECT count(*) FROM issues WHERE deleted_at IS NULL AND (description_html LIKE %s OR description_html LIKE %s)", ["%jira.aruhi-corp.co.jp%", "%aruhi-corp.atlassian.net%"])
-print(f"Remaining in issues: {cursor.fetchone()[0]}")
+patterns = [
+    "%jira.aruhi-corp.co.jp%",
+    "%confluence.aruhi-corp.co.jp%",
+    "%aruhi-corp.atlassian.net%",
+]
 
-cursor.execute("SELECT count(*) FROM issue_comments WHERE deleted_at IS NULL AND (comment_html LIKE %s OR comment_html LIKE %s)", ["%jira.aruhi-corp.co.jp%", "%aruhi-corp.atlassian.net%"])
-print(f"Remaining in comments: {cursor.fetchone()[0]}")
+def _count(table, col):
+    clause = " OR ".join([f"{col} LIKE %s"] * len(patterns))
+    cursor.execute(f"SELECT count(*) FROM {table} WHERE deleted_at IS NULL AND ({clause})", patterns)
+    return cursor.fetchone()[0]
 
-cursor.execute("SELECT count(*) FROM pages WHERE deleted_at IS NULL AND (description_html LIKE %s OR description_html LIKE %s)", ["%jira.aruhi-corp.co.jp%", "%aruhi-corp.atlassian.net%"])
-print(f"Remaining in pages: {cursor.fetchone()[0]}")
+print(f"Remaining in issues: {_count('issues', 'description_html')}")
+print(f"Remaining in comments: {_count('issue_comments', 'comment_html')}")
+print(f"Remaining in pages: {_count('pages', 'description_html')}")
