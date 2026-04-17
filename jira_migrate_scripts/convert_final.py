@@ -96,9 +96,11 @@ def confluence_to_tiptap(xhtml):
         bg_m = re.search(r'background-color:\s*([^;"]+)', attrs)
         r = ''
         if color_m:
-            r += f' data-text-color="{color_m.group(1).strip()}" style="color: {color_m.group(1).strip()}"'
+            r += f' data-text-color="{color_m.group(1).strip()}"'
         if bg_m:
-            r += f' data-background-color="{bg_m.group(1).strip()}" style="background-color: {bg_m.group(1).strip()}"'
+            r += f' data-background-color="{bg_m.group(1).strip()}"'
+        # Do NOT include style attribute — zeed-dom (TipTap server-side DOM) breaks
+        # parseHTML when style is present alongside data attributes (tiptap #5352)
         return f'<span{r or " " + attrs}>'
     h = re.sub(r'<span\s+style="([^"]*(?:color|background)[^"]*)">', fix_color_span, h)
 
