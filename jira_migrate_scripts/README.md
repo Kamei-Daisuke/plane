@@ -107,6 +107,9 @@ KEY=jira_migrate_scripts/data/confluence_export/AT/attachments/02-02_AWS/AruhiAt
 aws ec2 modify-instance-attribute --instance-id i-040d1f4a7dd19a638 --instance-type t2.large --profile ip --region ap-northeast-1
 aws ec2 start-instances --instance-ids i-040d1f4a7dd19a638 --profile ip --region ap-northeast-1
 
+# MySQL の認証情報は Confluence の設定ファイルから取得:
+#   cat /opt/atlassian/data/confluence/confluence.cfg.xml | grep hibernate.connection
+
 # ページデータ
 ssh -i $KEY ec2-user@<IP> "mysql -u <USER> -p<PASS> confluence \
   -e \"SELECT JSON_OBJECT('id', c.CONTENTID, 'title', c.TITLE, 'body', b.BODY, 'space', s.SPACEKEY) \
