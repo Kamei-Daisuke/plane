@@ -43,7 +43,7 @@ export class Redis extends HocuspocusRedis {
     // Subscribe to admin channel on the dedicated client so our messages do
     // not reach upstream's binary decoder.
     await new Promise<void>((resolve, reject) => {
-      this.adminSub!.subscribe(this.ADMIN_CHANNEL, (error: Error | null) => {
+      this.adminSub!.subscribe(this.ADMIN_CHANNEL, (error?: Error | null) => {
         if (error) {
           logger.error(`[Redis] Failed to subscribe to admin channel:`, error);
           reject(error);
@@ -113,7 +113,7 @@ export class Redis extends HocuspocusRedis {
   async onDestroy() {
     if (this.adminSub) {
       await new Promise<void>((resolve) => {
-        this.adminSub!.unsubscribe(this.ADMIN_CHANNEL, (error: Error | null) => {
+        this.adminSub!.unsubscribe(this.ADMIN_CHANNEL, (error?: Error | null) => {
           if (error) {
             logger.error(`[Redis] Error unsubscribing from admin channel:`, error);
           }
