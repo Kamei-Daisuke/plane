@@ -40,6 +40,60 @@ class IssueTypeSerializer(BaseSerializer):
         read_only_fields = fields
 
 
+class IssueTypeWriteSerializer(BaseSerializer):
+    class Meta:
+        model = IssueType
+        fields = ["id", "name", "description", "logo_props", "is_epic", "is_default", "is_active"]
+        read_only_fields = ["id"]
+
+
+class WorkspaceIssueTypeViewSet(BaseViewSet):
+    """CRUD for issue types at the workspace level.
+
+    URL: workspaces/<slug>/issue-types/
+    """
+
+    permission_classes = [WorkSpaceBasePermission]
+    serializer_class = IssueTypeWriteSerializer
+
+    def get_queryset(self):
+        return IssueType.objects.filter(
+            workspace__slug=self.kwargs["slug"],
+            deleted_at__isnull=True,
+        ).order_by("name")
+
+    def list(self, request, slug):
+        queryset = self.get_queryset()
+        serializer = IssueTypeSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def create(self, request, slug):
+        from plane.db.models import Workspace
+
+        workspace = Workspace.objects.get(slug=slug)
+        serializer = IssueTypeWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(workspace=workspace)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, slug, pk):
+        issue_type = self.get_queryset().get(pk=pk)
+        serializer = IssueTypeWriteSerializer(issue_type, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def destroy(self, request, slug, pk):
+        issue_type = self.get_queryset().get(pk=pk)
+        if issue_type.is_default:
+            return Response(
+                {"error": "Cannot delete the default issue type."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        issue_type.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class ProjectIssueTypeListView(BaseAPIView):
     """List issue types available for a project.
 

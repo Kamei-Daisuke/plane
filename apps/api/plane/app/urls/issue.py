@@ -36,6 +36,7 @@ from plane.app.views import (
     IssuePropertyValueEndpoint,
     ProjectPropertyValuesBulkEndpoint,
     ProjectIssueTypeListView,
+    WorkspaceIssueTypeViewSet,
     IssueWorklogViewSet,
 )
 
@@ -288,6 +289,17 @@ urlpatterns = [
         "workspaces/<str:slug>/work-items/<str:project_identifier>-<str:issue_identifier>/",
         IssueDetailIdentifierEndpoint.as_view(),
         name="issue-detail-identifier",
+    ),
+    # Workspace issue types (CRUD)
+    path(
+        "workspaces/<str:slug>/issue-types/",
+        WorkspaceIssueTypeViewSet.as_view({"get": "list", "post": "create"}),
+        name="workspace-issue-types",
+    ),
+    path(
+        "workspaces/<str:slug>/issue-types/<uuid:pk>/",
+        WorkspaceIssueTypeViewSet.as_view({"patch": "partial_update", "delete": "destroy"}),
+        name="workspace-issue-type-detail",
     ),
     # Project issue types
     path(

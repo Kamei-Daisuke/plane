@@ -160,6 +160,7 @@ from .issue.property import (
     IssuePropertyValueEndpoint,
     ProjectPropertyValuesBulkEndpoint,
     ProjectIssueTypeListView,
+    WorkspaceIssueTypeViewSet,
 )
 
 from .issue.worklog import IssueWorklogViewSet
@@ -175,7 +176,7 @@ from .module.issue import ModuleIssueViewSet
 
 from .module.archive import ModuleArchiveUnarchiveEndpoint
 
-from .api import ApiTokenEndpoint
+from .api import ApiTokenEndpoint, ServiceApiTokenEndpoint
 
 from .page.base import (
     PageViewSet,

@@ -7,8 +7,6 @@
 import { HocuspocusProvider } from "@hocuspocus/provider";
 // react
 import { useCallback, useEffect, useRef, useState } from "react";
-// indexeddb
-import { IndexeddbPersistence } from "y-indexeddb";
 // yjs
 import type * as Y from "yjs";
 // types
@@ -142,13 +140,13 @@ export const useYjsSetup = ({ docId, serverUrl, authToken, onStateChange }: UseY
       if (isDisposedRef.current) return;
 
       const closeCode = closeEvent.event?.code;
-      const closeReason = closeEvent.event?.reason;
 
-      // Server signaled corruption (e.g. after a bulk reimport). Force a full
-      // reload so the browser drops its in-memory Y.Doc and refetches from the
-      // server — otherwise the stale client state would merge back and re-bloat
-      // the document.
-      if (closeCode === 4000 && closeReason === "corruption_detected") {
+      // Admin-initiated FORCE_CLOSE (code 4000) — always reload. During the
+      // active data migration we use this to evict clients whose in-memory
+      // Y.Doc may be out of sync with the freshly reimported server state.
+      // A reload drops the stale Y.Doc and refetches from the server, so the
+      // client's state cannot merge back and re-bloat the document.
+      if (closeCode === 4000) {
         window.location.reload();
         return;
       }
@@ -278,30 +276,15 @@ export const useYjsSetup = ({ docId, serverUrl, authToken, onStateChange }: UseY
     };
   }, [docId, serverUrl, authToken]);
 
-  // IndexedDB persistence lifecycle
+  // IndexedDB persistence disabled — always fetch from server.
+  // The IndexedDB cache caused document bloat when stale Y.js documents
+  // merged with the server document on reconnect.
   useEffect(() => {
     if (!yjsSession) return;
-
-    const idbPersistence = new IndexeddbPersistence(docId, yjsSession.provider.document);
-
-    const onIdbSynced = () => {
-      const yFragment = idbPersistence.doc.getXmlFragment("default");
-      const docLength = yFragment?.length ?? 0;
-      setIsCacheReady(true);
-      setHasCachedContent(docLength > 0);
-    };
-
-    idbPersistence.on("synced", onIdbSynced);
-
-    return () => {
-      idbPersistence.off("synced", onIdbSynced);
-      try {
-        idbPersistence.destroy();
-      } catch (error) {
-        console.error(`Error destroying local provider:`, error);
-      }
-    };
-  }, [docId, yjsSession]);
+    // Mark cache as ready immediately (no local data)
+    setIsCacheReady(true);
+    setHasCachedContent(false);
+  }, [yjsSession]);
 
   // Observe Y.Doc content changes to update hasCachedContent (catches fallback scenario)
   useEffect(() => {

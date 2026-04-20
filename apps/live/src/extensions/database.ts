@@ -77,6 +77,24 @@ const storeDocument = async ({
 }: StorePayloadWithContext) => {
   try {
     const service = getPageService(context.documentType, context);
+
+    // Guard against stale client cache causing document bloat.
+    // If the incoming binary is >1.5x the size of the stored binary,
+    // it likely contains merged duplicates from an outdated IndexedDB cache.
+    try {
+      const existingBinary = (await service.fetchDescriptionBinary(pageId)) as Buffer;
+      const existingSize = new Uint8Array(existingBinary).byteLength;
+      if (existingSize > 0 && pageBinaryData.byteLength > existingSize * 1.5) {
+        logger.warn(
+          `Rejecting bloated document for ${pageId}: incoming=${pageBinaryData.byteLength} existing=${existingSize}`
+        );
+        return;
+      }
+    } catch (guardError) {
+      logger.warn(`Guard check failed for ${pageId}, rejecting save to prevent bloat:`, guardError);
+      return;
+    }
+
     // convert binary data to all formats
     const { contentBinaryEncoded, contentHTML, contentJSON } = getAllDocumentFormatsFromDocumentEditorBinaryData(
       pageBinaryData,

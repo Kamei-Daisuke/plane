@@ -10,6 +10,12 @@ with open('jira_migrate_scripts/data/page_asset_map.json') as f:
     asset_map = json.load(f)
 with open('jira_migrate_scripts/data/page_map.json') as f:
     page_map = json.load(f)
+with open('jira_migrate_scripts/data/title_to_plane_id.json', encoding='utf-8') as f:
+    title_to_plane = json.load(f)
+with open('jira_migrate_scripts/data/title_stripped_to_plane_id.json', encoding='utf-8') as f:
+    title_stripped_to_plane = json.load(f)
+with open('jira_migrate_scripts/data/page_to_project.json') as f:
+    page_to_project = json.load(f)
 
 
 def confluence_to_tiptap(xhtml):
@@ -76,6 +82,18 @@ def confluence_to_tiptap(xhtml):
             return f'<a href="{url_m.group(1)}" target="_blank" rel="noopener noreferrer nofollow">{t}</a>'
         if page_m:
             t = text or page_m.group(1)
+            title_raw = page_m.group(1)
+            # Try exact title match, then stripped-HTML match
+            plane_id = title_to_plane.get(title_raw)
+            if not plane_id:
+                stripped = re.sub(r'<[^>]+>', '', title_raw).strip()
+                plane_id = title_stripped_to_plane.get(stripped)
+            if plane_id:
+                project_id = page_to_project.get(plane_id)
+                clean_text = re.sub(r'<[^>]+>', '', t).strip() or title_raw
+                if project_id:
+                    return f'<a href="https://plane.example.com/keis/projects/{project_id}/pages/{plane_id}/">{clean_text}</a>'
+                return f'<a data-page-id="{plane_id}">{clean_text}</a>'
             return f'[Page: {t}]'
         return text or ''
     h = re.sub(r'<ac:link[^>]*>(.*?)</ac:link>', replace_link, h, flags=re.DOTALL)
@@ -86,6 +104,33 @@ def confluence_to_tiptap(xhtml):
     h = re.sub(r'</?ri:[a-z-]+[^>]*>', '', h)
     h = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', h, flags=re.DOTALL)
     h = re.sub(r'<ac:emoticon[^>]*/>', '', h)
+
+    # Table width: convert table style="width: X%" to colwidth on cells
+    EDITOR_WIDTH = 720  # Plane editor max-width in px
+    def fix_table_width(m):
+        table_tag = m.group(1)
+        table_body = m.group(2)
+        width_m = re.search(r'width:\s*([\d.]+)%', table_tag)
+        if not width_m:
+            return m.group(0)
+        table_px = int(float(width_m.group(1)) / 100 * EDITOR_WIDTH)
+        # Count columns from first row
+        first_row = re.search(r'<tr[^>]*>(.*?)</tr>', table_body, re.DOTALL)
+        if not first_row:
+            return m.group(0)
+        num_cols = len(re.findall(r'<t[hd]', first_row.group(1)))
+        if num_cols == 0:
+            return m.group(0)
+        col_w = max(50, table_px // num_cols)
+        # Add colwidth to all th/td that don't already have it
+        def add_colwidth(cell_m):
+            tag = cell_m.group(0)
+            if 'colwidth' in tag:
+                return tag
+            return tag[:-1] + f' colwidth="{col_w}">'
+        new_body = re.sub(r'<(t[hd])([^>]*)>', add_colwidth, table_body)
+        return f'<table>{new_body}</table>'
+    h = re.sub(r'<table([^>]*)>(.*?)</table>', fix_table_width, h, flags=re.DOTALL)
 
     # TipTap format
     h = re.sub(r'<hr\s*/?>', '<div class="py-4 border-strong-1" data-type="horizontalRule"><div></div></div>', h)

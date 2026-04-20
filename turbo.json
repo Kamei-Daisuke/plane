@@ -4,6 +4,7 @@
   "globalEnv": [
     "APP_VERSION",
     "DEV",
+    "GIT_HASH",
     "LOG_LEVEL",
     "NODE_ENV",
     "SENTRY_DSN",

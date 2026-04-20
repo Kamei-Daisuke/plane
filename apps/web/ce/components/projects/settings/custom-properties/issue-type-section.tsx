@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { observer } from "mobx-react";
 import { Plus } from "lucide-react";
-import type { TIssueType } from "@plane/types";
+import type { TIssueType, TLogoProps } from "@plane/types";
 import { useTranslation } from "@plane/i18n";
 import { Logo } from "@plane/propel/emoji-icon-picker";
 import { useIssueProperty } from "@/hooks/store/use-issue-property";
@@ -48,7 +48,7 @@ export const IssueTypeSection = observer(function IssueTypeSection({ issueType, 
         <div className="flex items-center gap-2">
           {issueType.logo_props && (
             <span className="grid h-5 w-5 flex-shrink-0 place-items-center">
-              <Logo logo={issueType.logo_props} size={16} />
+              <Logo logo={issueType.logo_props as TLogoProps} size={16} />
             </span>
           )}
           <h3 className="text-sm text-custom-text-100 font-semibold">{issueType.name}</h3>

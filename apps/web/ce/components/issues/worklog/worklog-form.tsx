@@ -95,7 +95,7 @@ export function WorklogForm({ initial, onSubmit, onCancel }: Props) {
         <Button variant="primary" size="sm" onClick={handleSubmit} loading={submitting}>
           {initial?.id ? t("worklog.update") : t("worklog.record")}
         </Button>
-        <Button variant="neutral-primary" size="sm" onClick={onCancel}>
+        <Button variant="secondary" size="sm" onClick={onCancel}>
           {t("worklog.cancel")}
         </Button>
       </div>

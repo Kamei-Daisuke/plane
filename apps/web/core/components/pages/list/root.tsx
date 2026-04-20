@@ -35,6 +35,7 @@ export const PagesListRoot = observer(function PagesListRoot(props: TPagesListRo
   const [collapsedPageIds, setCollapsedPageIds] = useState<Record<string, boolean>>({});
   const [isRootDropActive, setIsRootDropActive] = useState(false);
   const rootDropRef = useRef<HTMLDivElement | null>(null);
+  const hasInitializedCollapse = useRef(false);
 
   if (!filteredPageIds) return <></>;
 
@@ -56,6 +57,18 @@ export const PagesListRoot = observer(function PagesListRoot(props: TPagesListRo
 
     rootPageIds.push(pageId);
   });
+
+  // Initialize all parent pages as collapsed on first load
+  if (!hasInitializedCollapse.current && filteredPageIds.length > 0) {
+    const initialCollapsed: Record<string, boolean> = {};
+    childIdsByParentId.forEach((_, parentId) => {
+      initialCollapsed[parentId] = true;
+    });
+    if (Object.keys(initialCollapsed).length > 0) {
+      setCollapsedPageIds(initialCollapsed);
+    }
+    hasInitializedCollapse.current = true;
+  }
 
   const togglePageExpansion = (pageId: string) =>
     setCollapsedPageIds((currentState) => ({

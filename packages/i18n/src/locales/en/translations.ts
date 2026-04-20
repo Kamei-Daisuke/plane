@@ -230,6 +230,7 @@ export default {
   work_management_description: "Manage your work and projects with ease.",
   documentation: "Documentation",
   contact_sales: "Contact sales",
+  message_support: "Message support",
   hyper_mode: "Hyper Mode",
   keyboard_shortcuts: "Keyboard shortcuts",
   whats_new: "What's new?",
@@ -1574,6 +1575,23 @@ export default {
           secret_key_not_copied: {
             message: "Error occurred while copying secret key.",
           },
+        },
+      },
+      issue_types: {
+        title: "Issue Types",
+        heading: "Issue Types",
+        description: "Manage the issue types available in your workspace.",
+        add_type: "Add issue type",
+        name_label: "Name",
+        name_placeholder: "e.g. Bug, Story, Task",
+        save: "Save",
+        cancel: "Cancel",
+        delete_confirm: "Are you sure you want to delete this issue type?",
+        toasts: {
+          created: "Issue type created",
+          updated: "Issue type updated",
+          deleted: "Issue type deleted",
+          error: "Something went wrong. Please try again.",
         },
       },
       api_tokens: {

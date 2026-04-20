@@ -147,7 +147,7 @@ export function PropertyForm({ initial, onSubmit, onCancel }: Props) {
         <Button variant="primary" size="sm" onClick={handleSubmit} loading={submitting}>
           {initial?.id ? t("project_settings.custom_properties.update") : t("project_settings.custom_properties.add")}
         </Button>
-        <Button variant="neutral-primary" size="sm" onClick={onCancel}>
+        <Button variant="secondary" size="sm" onClick={onCancel}>
           {t("project_settings.custom_properties.cancel")}
         </Button>
       </div>

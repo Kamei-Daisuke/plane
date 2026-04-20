@@ -25,4 +25,8 @@ with open("/tmp/page_updates_tiptap_fixed.jsonl", encoding="utf-8") as f:
             if errors <= 3:
                 print(f"Error: {e}")
 
+connection.ensure_connection()
+if not connection.get_autocommit():
+    connection.cursor().execute("COMMIT")
+
 print(f"Updated {count} pages, {errors} errors")

@@ -6,6 +6,8 @@ import tsconfigPaths from "vite-tsconfig-paths";
 
 dotenv.config({ path: path.resolve(__dirname, ".env") });
 
+const gitHash = process.env.GIT_HASH || "dev";
+
 // Expose only vars starting with VITE_
 const viteEnv = Object.keys(process.env)
   .filter((k) => k.startsWith("VITE_"))
@@ -17,6 +19,7 @@ const viteEnv = Object.keys(process.env)
 export default defineConfig(() => ({
   define: {
     "process.env": JSON.stringify(viteEnv),
+    __GIT_HASH__: JSON.stringify(gitHash),
   },
   build: {
     assetsInlineLimit: 0,

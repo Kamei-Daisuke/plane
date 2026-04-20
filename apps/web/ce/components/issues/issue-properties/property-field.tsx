@@ -72,14 +72,7 @@ function SelectField({
   );
 }
 
-export function PropertyField({
-  property,
-  value,
-  onChange,
-  projectId,
-  disabled,
-  error,
-}: Props) {
+export function PropertyField({ property, value, onChange, projectId, disabled, error }: Props) {
   const { t } = useTranslation();
   const { property_type, display_name } = property;
 
@@ -149,9 +142,10 @@ export function PropertyField({
         return (
           <MemberDropdown
             value={(value as string) ?? null}
-            onChange={(v) => onChange(v)}
+            onChange={(v: string | null) => onChange(v)}
             projectId={projectId}
             disabled={disabled}
+            multiple={false}
             placeholder={t("project_settings.custom_properties.select_member")}
             buttonVariant="border-with-text"
             buttonClassName="text-sm"

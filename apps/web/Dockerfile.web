@@ -70,6 +70,9 @@ ENV VITE_WEB_BASE_URL=$VITE_WEB_BASE_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV TURBO_TELEMETRY_DISABLED=1
 
+ARG GIT_HASH=""
+ENV GIT_HASH=$GIT_HASH
+
 RUN pnpm turbo run build --filter=web
 
 # *****************************************************************************

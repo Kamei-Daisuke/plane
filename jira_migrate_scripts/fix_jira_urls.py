@@ -84,13 +84,13 @@ def replace_all_old_urls(html):
     def _repl_jira_browse(m):
         key = m.group(1)
         return key_to_url.get(key, m.group(0))
-    html = re.sub(r'https?://jira\.aruhi-corp\.co\.jp/browse/([A-Z]+-\d+)', _repl_jira_browse, html)
+    html = re.sub(r'https?://jira\.aruhi-corp\.co\.jp/browse/([A-Z][A-Z0-9]+-\d+)', _repl_jira_browse, html)
 
     # 2. aruhi-corp.atlassian.net/browse/PROJ-123
     def _repl_atlassian_browse(m):
         key = m.group(1)
         return key_to_url.get(key, m.group(0))
-    html = re.sub(r'https?://aruhi-corp\.atlassian\.net/browse/([A-Z]+-\d+)', _repl_atlassian_browse, html)
+    html = re.sub(r'https?://aruhi-corp\.atlassian\.net/browse/([A-Z][A-Z0-9]+-\d+)', _repl_atlassian_browse, html)
 
     # 3. aruhi-corp.atlassian.net/wiki/.../pages/ID/...  (Cloud Confluence)
     def _repl_confluence_url(m):
