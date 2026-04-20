@@ -4,20 +4,20 @@
 
 ### HIGH
 
-- [x] **画像 "Error loading image"** → **対応済 2026-04-20**（3 ページ × 39 参照を placeholder に置換）
-  - 対応ページ: 9927b198, 55cc494c, 9c7402d3
-  - 置換テキスト: `[画像欠損: 元 Confluence から復元できませんでした]`
-  - 元画像の復元は不可（Plane UUID が file_assets に無く、Confluence content ID への逆引きマップが無い）
-  - 改善余地: 元 Confluence の `<ac:image>` 順序と Plane UUID の順序を位置対応させれば復元可能かも（今回は見送り）
+- [x] **画像 "Error loading image"** → **2 段階で対応済 2026-04-20**
+  - 最初の対応: 3 ページ × 39 参照を placeholder に置換 → 誤判断（画像は削除されていない）
+  - ユーザ指摘で方針変更: dedupe で消えた Plane UUID を `page_asset_map.json` 経由で filename に逆引きし、残存する同名+同サイズの file_asset UUID に書き換え
+  - `jira_migrate_scripts/fix_missing_image_uuids.py` で **79 ページ × 768 refs を復元**（710 は filename+size 一致、49 は name-only fallback）
+  - 復元前に `extract_backup_html.py` + `restore_pages_from_files.py` で 3 ページの description_html を backup から restore
 
 - [x] **Excel/PDF/DOCX 添付が HTML に差し込まれていない** — file_assets には存在するが description_html にリンクが無い → **対応済 2026-04-20**
   - 340 ページ × 2440 添付 を `jira_migrate_scripts/inject_orphan_attachments.py` で footer に一括追加
   - description_binary クリア + force_close ブロードキャスト済み
 
-- [ ] ~~**コードブロックが引き継がれていない**~~ — 調査の結果、元の Confluence に code macro が無かった。2 ページとも info box（URL/header/body を列挙）が Plane では plain `<p>` に変換されて見た目が code ブロックに見えない状態。本質的には migration バグではなく content rendering の違い
-  - 既知: [ef8af409 (Profiles POST)](https://plane.keis-software.com/keis/projects/cc5b6449-177b-412b-b9de-08707161428a/pages/ef8af409-eb2c-4d29-8918-e6c9590b1716/)
-  - 既知: [1245c9ce (Profiles PUT)](https://plane.keis-software.com/keis/projects/cc5b6449-177b-412b-b9de-08707161428a/pages/1245c9ce-c23e-42d9-8ddf-7315bcf98e91/)
-  - 対応: info box 内容を blockquote or 同等の視覚的強調に変換するか、ユーザに個別調整してもらう
+- [x] **コードブロックが引き継がれていない** → **対応済 2026-04-20**（2 ページ × 10 samples）
+  - `jira_migrate_scripts/inject_api_samples_as_codeblock.py` で Confluence の info macro 内に URL:/ボディ: を含むサンプルを抽出し、ページ末尾に `<pre><code>` の「リクエスト・レスポンスサンプル」節として追加
+  - 対応: ef8af409 (Profiles POST / 5 samples), 1245c9ce (Profiles PUT / 5 samples)
+  - 要検討: 他の API 仕様ページでも同パターン info box があれば一括適用（全ページ走査で検出し `--apply` 引数なしで実行）
 
 - [x] **Confluence への外部リンクが残っている** — リンク先が Plane 内ページではなく元 Confluence URL のまま → **対応済 2026-04-20**
   - 12 ページ × 47 リンクを `jira_migrate_scripts/rewrite_confluence_links.py` で Plane URL に書き換え
