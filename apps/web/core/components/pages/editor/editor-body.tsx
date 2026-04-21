@@ -43,7 +43,7 @@ import { useEditorFlagging } from "@/plane-web/hooks/use-editor-flagging";
 import type { TPageInstance } from "@/store/pages/base-page";
 // local imports
 import { PageContentLoader } from "../loaders/page-content-loader";
-import { PageEditorHeaderRoot } from "./header";
+import { PageBreadcrumb, PageEditorHeaderRoot } from "./header";
 import { PageContentBrowser } from "./summary";
 
 export type TEditorBodyConfig = {
@@ -260,6 +260,9 @@ export const PageEditorBody = observer(function PageEditorBody(props: Props) {
         <div>
           <div className="page-header-container group/page-header">
             <div className={blockWidthClassName}>
+              {projectId && (
+                <PageBreadcrumb page={page} storeType={storeType} workspaceSlug={workspaceSlug} projectId={projectId} />
+              )}
               <PageEditorHeaderRoot page={page} projectId={projectId} />
             </div>
           </div>

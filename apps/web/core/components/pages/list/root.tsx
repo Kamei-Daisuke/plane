@@ -32,7 +32,33 @@ export const PagesListRoot = observer(function PagesListRoot(props: TPagesListRo
   const { getCurrentProjectFilteredPageIdsByTab, getPageById } = usePageStore(storeType);
   // derived values
   const filteredPageIds = getCurrentProjectFilteredPageIdsByTab(pageType);
-  const [collapsedPageIds, setCollapsedPageIds] = useState<Record<string, boolean>>({});
+  // Persist tree expand/collapse state across navigations within the same
+  // browser session so users who click a child page and hit back get the
+  // tree in the same shape they left it.
+  const storageKey = `page-tree-collapsed:${storeType}:${pageType}`;
+  const [collapsedPageIds, setCollapsedPageIdsState] = useState<Record<string, boolean>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const saved = window.sessionStorage.getItem(storageKey);
+      if (saved) return JSON.parse(saved) as Record<string, boolean>;
+    } catch {
+      /* ignore */
+    }
+    return {};
+  });
+  const setCollapsedPageIds = (
+    updater: Record<string, boolean> | ((prev: Record<string, boolean>) => Record<string, boolean>)
+  ) => {
+    setCollapsedPageIdsState((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      try {
+        window.sessionStorage.setItem(storageKey, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  };
   const [isRootDropActive, setIsRootDropActive] = useState(false);
   const rootDropRef = useRef<HTMLDivElement | null>(null);
   const hasInitializedCollapse = useRef(false);
@@ -58,14 +84,18 @@ export const PagesListRoot = observer(function PagesListRoot(props: TPagesListRo
     rootPageIds.push(pageId);
   });
 
-  // Initialize all parent pages as collapsed on first load
+  // Initialize all parent pages as collapsed on first load only when we
+  // have no saved state (first visit this session). Once a saved state
+  // exists, respect the user's previous choices.
   if (!hasInitializedCollapse.current && filteredPageIds.length > 0) {
-    const initialCollapsed: Record<string, boolean> = {};
-    childIdsByParentId.forEach((_, parentId) => {
-      initialCollapsed[parentId] = true;
-    });
-    if (Object.keys(initialCollapsed).length > 0) {
-      setCollapsedPageIds(initialCollapsed);
+    if (Object.keys(collapsedPageIds).length === 0) {
+      const initialCollapsed: Record<string, boolean> = {};
+      childIdsByParentId.forEach((_, parentId) => {
+        initialCollapsed[parentId] = true;
+      });
+      if (Object.keys(initialCollapsed).length > 0) {
+        setCollapsedPageIds(initialCollapsed);
+      }
     }
     hasInitializedCollapse.current = true;
   }
