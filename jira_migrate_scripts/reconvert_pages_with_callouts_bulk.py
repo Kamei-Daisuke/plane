@@ -121,6 +121,12 @@ def make_code_block(lang: str, code: str) -> str:
 
 def convert_macro(attrs: str, inner: str, asset_map: dict) -> str:
     name = get_macro_name(attrs) or ""
+    # toc → inline note pointing to the outline pane (Plane renders the
+    # real outline in the right-side navigation pane automatically)
+    if name == "toc":
+        return (
+            f'<p class="{P_CLASS}"><em>※ 目次はページ右側のアウトラインペインに自動表示されます。</em></p>'
+        )
     if name in CODE_MACRO_NAMES:
         lang_m = re.search(r'<ac:parameter[^>]*ac:name="language">([^<]+)', inner)
         lang = lang_m.group(1).strip() if lang_m else ""
@@ -284,7 +290,7 @@ def main():
 
     updates = []
     stats = defaultdict(int)
-    HAS_TARGET = re.compile(r'ac:name="(info|note|tip|warning)"|<ac:task-list\b')
+    HAS_TARGET = re.compile(r'ac:name="(info|note|tip|warning|toc)"|<ac:task-list\b')
 
     with open(CONF, "r", encoding="utf-8") as f:
         for line in f:
@@ -315,13 +321,15 @@ def main():
             )
             callout_count = new_html.count('data-block-type="callout-component"')
             task_list_count = new_html.count('data-type="taskList"')
-            if callout_count == 0 and task_list_count == 0:
+            toc_note_count = new_html.count("アウトラインペイン")
+            if callout_count == 0 and task_list_count == 0 and toc_note_count == 0:
                 stats["no_content_produced"] += 1
                 continue
-            updates.append((page_id, new_html, callout_count + task_list_count))
+            updates.append((page_id, new_html, callout_count + task_list_count + toc_note_count))
             stats["pages"] += 1
             stats["callouts"] += callout_count
             stats["task_lists"] += task_list_count
+            stats["toc_notes"] += toc_note_count
 
     print("Stats:", file=sys.stderr)
     for k, v in sorted(stats.items()):
