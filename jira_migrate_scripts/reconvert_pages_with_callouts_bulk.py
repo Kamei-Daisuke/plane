@@ -34,6 +34,7 @@ from plane.db.models import Page  # noqa: E402
 CONF = os.environ.get("CONFLUENCE_BODIES", "/tmp/conf_bodies_latest.tsv")
 PLANE_BASE = os.environ.get("PLANE_BASE", "https://plane.keis-software.com")
 WORKSPACE_SLUG = os.environ.get("WORKSPACE_SLUG", "keis")
+JIRA_BASE = os.environ.get("JIRA_BASE", "https://jira.aruhi-corp.co.jp")
 
 P_CLASS = "editor-paragraph-block"
 H_CLASS = "editor-heading-block"
@@ -43,6 +44,64 @@ STRUCTURED_OPEN_OR_CLOSE = re.compile(r'<(/?)ac:structured-macro\b[^>]*/?>')
 CALLOUT_MACRO_NAMES = {"info", "note", "tip", "warning"}
 CODE_MACRO_NAMES = {"code", "noformat"}
 ICON_BY_TYPE = {"info": "128161", "note": "128221", "tip": "128161", "warning": "9888"}
+
+# Populated by build_title_maps() at main()
+TITLE_TO_PLANE_URL: dict = {}
+
+
+def build_title_maps(cur):
+    """Build (space, title) → Plane page URL from Confluence page map.
+
+    Loaded from:
+      - /tmp/conf_bodies_latest.tsv: CONTENTID per page (latest version)
+      - CONTENT table via DB: (CONTENTID, TITLE, SPACEKEY) — but we
+        don't have Confluence DB here; instead use the jsonl that
+        includes space + title.
+    """
+    import os
+
+    jsonl = "/tmp/confluence_pages.jsonl"
+    title_to_cid = {}
+    if os.path.exists(jsonl):
+        with open(jsonl, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line.startswith("{"):
+                    continue
+                try:
+                    d = json.loads(line)
+                except Exception:
+                    continue
+                cid = d.get("id")
+                title = d.get("title")
+                space = d.get("space")
+                if cid and title:
+                    title_to_cid[(space, title)] = int(cid)
+                    title_to_cid[(None, title)] = int(cid)  # fallback w/o space
+    # cid → plane page info
+    cur.execute(
+        "SELECT pages.external_id, pages.id::text, pp.project_id::text FROM pages "
+        "LEFT JOIN project_pages pp ON pp.page_id = pages.id "
+        "WHERE pages.external_source='confluence' AND pages.deleted_at IS NULL"
+    )
+    cid_to_plane = {}
+    for ext, pid, proj in cur.fetchall():
+        try:
+            cid = int(ext)
+        except (TypeError, ValueError):
+            continue
+        cid_to_plane[cid] = (pid, proj)
+
+    global TITLE_TO_PLANE_URL
+    TITLE_TO_PLANE_URL = {}
+    for (space, title), cid in title_to_cid.items():
+        if cid not in cid_to_plane:
+            continue
+        pid, proj = cid_to_plane[cid]
+        if not proj:
+            continue
+        TITLE_TO_PLANE_URL[(space, title)] = f"{PLANE_BASE}/{WORKSPACE_SLUG}/projects/{proj}/pages/{pid}/"
+    return len(TITLE_TO_PLANE_URL)
 
 
 def norm(s):
@@ -119,6 +178,15 @@ def make_code_block(lang: str, code: str) -> str:
     return f'<pre data-code-content="{encoded}"><code{la}>​</code></pre>'
 
 
+def get_param(inner: str, key: str) -> str:
+    m = re.search(
+        r'<ac:parameter\b[^>]*ac:name="' + re.escape(key) + r'"[^>]*>(.*?)</ac:parameter>',
+        inner,
+        re.DOTALL,
+    )
+    return m.group(1) if m else ""
+
+
 def convert_macro(attrs: str, inner: str, asset_map: dict) -> str:
     name = get_macro_name(attrs) or ""
     # toc → inline note pointing to the outline pane (Plane renders the
@@ -127,6 +195,86 @@ def convert_macro(attrs: str, inner: str, asset_map: dict) -> str:
         return (
             f'<p class="{P_CLASS}"><em>※ 目次はページ右側のアウトラインペインに自動表示されます。</em></p>'
         )
+
+    # jira macro → link to original Jira
+    if name == "jira":
+        key = html_mod.unescape(get_param(inner, "key").strip())
+        jql = html_mod.unescape(get_param(inner, "jqlQuery").strip())
+        if key:
+            return (
+                f'<p class="{P_CLASS}">'
+                f'<a href="{JIRA_BASE}/browse/{html_mod.escape(key)}" target="_blank" rel="noopener noreferrer">'
+                f'🎫 {html_mod.escape(key)}</a>'
+                f"</p>"
+            )
+        if jql:
+            import urllib.parse
+
+            encoded = urllib.parse.quote(jql)
+            return (
+                f'<p class="{P_CLASS}">'
+                f'<a href="{JIRA_BASE}/issues/?jql={encoded}" target="_blank" rel="noopener noreferrer">'
+                f"🎫 元 Jira クエリ結果を表示</a>"
+                f"<br><em>JQL: {html_mod.escape(jql)[:200]}</em>"
+                f"</p>"
+            )
+        return f'<p class="{P_CLASS}"><em>🎫 元 Jira 埋め込み（情報不足で復元不可）</em></p>'
+
+    # include → link to included page
+    if name == "include":
+        include_link_m = re.search(
+            r'<ac:link[^>]*>\s*<ri:page\b([^/]*)/>', inner, re.DOTALL
+        )
+        if include_link_m:
+            a = include_link_m.group(1)
+            title_m = re.search(r'ri:content-title="([^"]+)"', a)
+            space_m = re.search(r'ri:space-key="([^"]+)"', a)
+            title = html_mod.unescape(title_m.group(1)) if title_m else None
+            space = space_m.group(1) if space_m else None
+            if title:
+                url = TITLE_TO_PLANE_URL.get((space, title)) or TITLE_TO_PLANE_URL.get((None, title))
+                display = html_mod.escape(title)
+                if url:
+                    return (
+                        f'<p class="{P_CLASS}">'
+                        f'📄 <a href="{url}">{display}</a>'
+                        f" <em>(元 Confluence の include マクロ)</em>"
+                        f"</p>"
+                    )
+                return (
+                    f'<p class="{P_CLASS}">'
+                    f"📄 <em>未解決 include: {display}</em>"
+                    f"</p>"
+                )
+        return ""
+
+    # expand → bold title + content
+    if name == "expand":
+        title = html_mod.unescape(get_param(inner, "title").strip())
+        rtb_match = re.search(r"<ac:rich-text-body>(.*)</ac:rich-text-body>", inner, re.DOTALL)
+        content_html = convert_all_macros(rtb_match.group(1), asset_map) if rtb_match else ""
+        title_html = ""
+        if title:
+            title_html = f'<p class="{P_CLASS}"><strong>▼ {html_mod.escape(title)}</strong></p>'
+        return title_html + content_html
+
+    # panel → callout (emoji varies by bg color)
+    if name == "panel":
+        rtb_match = re.search(r"<ac:rich-text-body>(.*)</ac:rich-text-body>", inner, re.DOTALL)
+        content_html = convert_all_macros(rtb_match.group(1), asset_map) if rtb_match else ""
+        title = html_mod.unescape(get_param(inner, "title").strip())
+        title_html = ""
+        if title:
+            title_html = f'<p class="{P_CLASS}"><strong>{html_mod.escape(title)}</strong></p>'
+        return make_callout_wrapper(title_html + content_html, "info")
+
+    # status → bold inline text
+    if name == "status":
+        title = html_mod.unescape(get_param(inner, "title").strip())
+        if not title:
+            return ""
+        return f'<strong>[{html_mod.escape(title)}]</strong>'
+
     if name in CODE_MACRO_NAMES:
         lang_m = re.search(r'<ac:parameter[^>]*ac:name="language">([^<]+)', inner)
         lang = lang_m.group(1).strip() if lang_m else ""
@@ -180,6 +328,87 @@ def convert_all_macros(fragment: str, asset_map: dict) -> str:
     if pos < len(fragment):
         out.append(fragment[pos:])
     return "".join(out)
+
+
+AC_LINK_RE = re.compile(r"<ac:link\b([^>]*)>(.*?)</ac:link>", re.DOTALL)
+
+
+def convert_ac_links(h: str, asset_map: dict, current_space: str | None = None) -> str:
+    """Resolve <ac:link> to <a href=…>text</a>.
+
+    - <ri:page content-title=… space-key=…> → Plane page URL via TITLE_TO_PLANE_URL
+    - <ri:url value=…> → direct href
+    - <ri:attachment filename=…> → /api/assets/v2/workspaces/keis/<asset_id>/
+    - Display text: <ac:plain-text-link-body>CDATA</ac:plain-text-link-body>
+                  | <ac:link-body>html</ac:link-body>
+                  | fallback to page title / url
+    """
+
+    def extract_text(link_inner: str, fallback: str) -> str:
+        ptb = re.search(
+            r"<ac:plain-text-link-body>\s*<!\[CDATA\[(.*?)\]\]>\s*</ac:plain-text-link-body>",
+            link_inner,
+            re.DOTALL,
+        )
+        if ptb:
+            return html_mod.escape(ptb.group(1))
+        lb = re.search(r"<ac:link-body>(.*?)</ac:link-body>", link_inner, re.DOTALL)
+        if lb:
+            return lb.group(1).strip() or html_mod.escape(fallback)
+        return html_mod.escape(fallback)
+
+    def repl(match):
+        attrs = match.group(1)
+        inner = match.group(2)
+        anchor_m = re.search(r'ac:anchor="([^"]+)"', attrs)
+        anchor = html_mod.unescape(anchor_m.group(1)) if anchor_m else None
+
+        ri_page = re.search(r'<ri:page\b([^/]*)/?>', inner)
+        ri_url = re.search(r'<ri:url\b([^/]*)/>', inner)
+        ri_att = re.search(r'<ri:attachment\b([^/]*)/>', inner)
+
+        if ri_page:
+            a = ri_page.group(1)
+            title_m = re.search(r'ri:content-title="([^"]+)"', a)
+            space_m = re.search(r'ri:space-key="([^"]+)"', a)
+            title = html_mod.unescape(title_m.group(1)) if title_m else None
+            space = space_m.group(1) if space_m else current_space
+            if title:
+                url = TITLE_TO_PLANE_URL.get((space, title)) or TITLE_TO_PLANE_URL.get((None, title))
+                if url:
+                    if anchor:
+                        url = url.rstrip("/") + f"#{anchor}"
+                    text = extract_text(inner, title)
+                    return f'<a href="{url}">{text}</a>'
+                # Unresolved — keep as plain text
+                text = extract_text(inner, title)
+                return f'<span title="未解決 Confluence link">{text}</span>'
+
+        if ri_url:
+            a = ri_url.group(1)
+            url_m = re.search(r'ri:value="([^"]+)"', a)
+            if url_m:
+                url = html_mod.unescape(url_m.group(1))
+                text = extract_text(inner, url)
+                return f'<a href="{url}" target="_blank" rel="noopener noreferrer">{text}</a>'
+
+        if ri_att:
+            a = ri_att.group(1)
+            fn_m = re.search(r'ri:filename="([^"]+)"', a)
+            if fn_m:
+                fname = norm(html_mod.unescape(fn_m.group(1)))
+                asset_id = asset_map.get(fname)
+                if asset_id:
+                    url = f"{PLANE_BASE}/api/assets/v2/workspaces/{WORKSPACE_SLUG}/{asset_id}/"
+                    text = extract_text(inner, fname)
+                    return f'<a href="{url}" target="_blank" rel="noopener noreferrer">{text}</a>'
+                text = extract_text(inner, fname)
+                return f'<span title="未解決 Confluence attachment">{text}</span>'
+
+        # Fallback
+        return extract_text(inner, "")
+
+    return AC_LINK_RE.sub(repl, h)
 
 
 def convert_task_lists(h: str) -> str:
@@ -257,8 +486,13 @@ def finalize_html(h: str, asset_map: dict) -> str:
     return h
 
 
-def convert_page_body(body: str, asset_map: dict) -> str:
-    # Task-list conversion must happen BEFORE the generic ac: strip
+def convert_page_body(body: str, asset_map: dict, space: str | None = None) -> str:
+    # Order matters:
+    #   1. ac:link → <a> (before ac: strip in finalize_html)
+    #   2. ac:task-list → TipTap tasklist
+    #   3. Macros (info, expand, code, etc.)
+    #   4. Finalize (images, layout strip, class decoration)
+    body = convert_ac_links(body, asset_map, space)
     body = convert_task_lists(body)
     converted = convert_all_macros(body, asset_map)
     return finalize_html(converted, asset_map)
@@ -288,9 +522,30 @@ def main():
         except (TypeError, ValueError):
             continue
 
+    n_titles = build_title_maps(cur)
+    print(f"Loaded {n_titles} (space, title) → Plane URL entries", file=sys.stderr)
+
+    # Build ext_id → space for current-space fallback on ac:link resolution
+    ext_to_space = {}
+    if os.path.exists("/tmp/confluence_pages.jsonl"):
+        with open("/tmp/confluence_pages.jsonl", "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line.startswith("{"):
+                    continue
+                try:
+                    d = json.loads(line)
+                except Exception:
+                    continue
+                if d.get("id") and d.get("space"):
+                    ext_to_space[int(d["id"])] = d["space"]
+
     updates = []
     stats = defaultdict(int)
-    HAS_TARGET = re.compile(r'ac:name="(info|note|tip|warning|toc)"|<ac:task-list\b')
+    HAS_TARGET = re.compile(
+        r'ac:name="(info|note|tip|warning|toc|jira|expand|include|panel|status)"'
+        r'|<ac:task-list\b|<ac:link\b'
+    )
 
     with open(CONF, "r", encoding="utf-8") as f:
         for line in f:
@@ -311,7 +566,8 @@ def main():
                 continue
             if target_ids and page_id not in target_ids:
                 continue
-            new_html = convert_page_body(body, asset_map)
+            space = ext_to_space.get(ext)
+            new_html = convert_page_body(body, asset_map, space)
             # Drop lingering migration-footer markers/content
             new_html = re.sub(
                 r"<!--\s*migration:[a-z-]+\s*-->.*?(?=<!--\s*migration:|\Z)",
@@ -322,14 +578,15 @@ def main():
             callout_count = new_html.count('data-block-type="callout-component"')
             task_list_count = new_html.count('data-type="taskList"')
             toc_note_count = new_html.count("アウトラインペイン")
-            if callout_count == 0 and task_list_count == 0 and toc_note_count == 0:
-                stats["no_content_produced"] += 1
-                continue
+            jira_count = new_html.count("/browse/") + new_html.count("/issues/?jql=")
+            include_count = new_html.count("元 Confluence の include マクロ")
             updates.append((page_id, new_html, callout_count + task_list_count + toc_note_count))
             stats["pages"] += 1
             stats["callouts"] += callout_count
             stats["task_lists"] += task_list_count
             stats["toc_notes"] += toc_note_count
+            stats["jira_refs"] += jira_count
+            stats["includes"] += include_count
 
     print("Stats:", file=sys.stderr)
     for k, v in sorted(stats.items()):
