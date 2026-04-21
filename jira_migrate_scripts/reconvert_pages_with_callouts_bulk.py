@@ -56,6 +56,10 @@ PLANE_ID_TO_NAME: dict = {}
 PLANE_ID_TO_URL: dict = {}
 # Populated by build_title_maps() — plane_page_id → sorted list of child page ids.
 PLANE_CHILDREN: dict = {}
+# Populated by build_title_maps() — uppercased project identifier ("GUDO" etc.)
+# set; used to decide whether a Jira key like "GUDO-4" maps to a migrated Plane
+# project and should be rewritten to /browse/GUDO-4/.
+PLANE_PROJECT_IDENTIFIERS: set = set()
 # Set by main() before each page's convert_page_body call; read by convert_macro
 # to render children/pagetree macros into a real child-page list.
 _CURRENT_PAGE_ID: str | None = None
@@ -64,7 +68,17 @@ CID_TO_PLANE_URL: dict = {}
 
 
 def resolve_confluence_url(url: str) -> str:
-    """Convert a Confluence URL to the equivalent Plane URL if possible."""
+    """Convert a Confluence or Jira URL to the equivalent Plane URL if possible."""
+    # Jira browse: jira.aruhi-corp.co.jp/browse/IDENT-N → /{slug}/browse/IDENT-N/
+    jira_m = re.search(
+        r"jira\.aruhi-corp\.co\.jp/browse/([A-Z][A-Z0-9_]*)-(\d+)\b",
+        url,
+    )
+    if jira_m:
+        ident = jira_m.group(1).upper()
+        if ident in PLANE_PROJECT_IDENTIFIERS:
+            return f"{PLANE_BASE}/{WORKSPACE_SLUG}/browse/{jira_m.group(1)}-{jira_m.group(2)}/"
+        return url
     if "confluence.aruhi-corp.co.jp" not in url:
         return url
     deamp = url.replace("&amp;", "&")
@@ -149,6 +163,11 @@ def build_title_maps(cur):
     for parent_id, rows in _children_tmp.items():
         rows.sort()
         PLANE_CHILDREN[parent_id] = [pid for _, _, pid in rows]
+
+    # Plane project identifiers (for Jira key → /browse/ rewrite)
+    global PLANE_PROJECT_IDENTIFIERS
+    cur.execute("SELECT DISTINCT identifier FROM projects WHERE identifier IS NOT NULL")
+    PLANE_PROJECT_IDENTIFIERS = {row[0].upper() for row in cur.fetchall() if row[0]}
 
     global TITLE_TO_PLANE_URL, CID_TO_PLANE_URL
     TITLE_TO_PLANE_URL = {}
@@ -259,14 +278,20 @@ def convert_macro(attrs: str, inner: str, asset_map: dict) -> str:
             f'<p class="{P_CLASS}"><em>※ 目次はページ右側のアウトラインペインに自動表示されます。</em></p>'
         )
 
-    # jira macro → link to original Jira
+    # jira macro → link to the Plane work item (if the project was migrated)
+    # or fall back to the original Jira browse URL.
     if name == "jira":
         key = html_mod.unescape(get_param(inner, "key").strip())
         jql = html_mod.unescape(get_param(inner, "jqlQuery").strip())
         if key:
+            ident_m = re.match(r"([A-Z][A-Z0-9_]*)-(\d+)", key)
+            if ident_m and ident_m.group(1).upper() in PLANE_PROJECT_IDENTIFIERS:
+                href = f"{PLANE_BASE}/{WORKSPACE_SLUG}/browse/{html_mod.escape(key)}/"
+            else:
+                href = f"{JIRA_BASE}/browse/{html_mod.escape(key)}"
             return (
                 f'<p class="{P_CLASS}">'
-                f'<a href="{JIRA_BASE}/browse/{html_mod.escape(key)}" target="_blank" rel="noopener noreferrer">'
+                f'<a href="{href}" target="_blank" rel="noopener noreferrer">'
                 f'🎫 {html_mod.escape(key)}</a>'
                 f"</p>"
             )
