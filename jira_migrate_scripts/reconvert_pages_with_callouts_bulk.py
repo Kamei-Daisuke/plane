@@ -52,6 +52,13 @@ TITLE_TO_PLANE_URL: dict = {}
 # Populated by build_title_maps() — plane_page_id → Plane page name (used for link
 # text when an author pasted a bare URL and we want a human-readable label).
 PLANE_ID_TO_NAME: dict = {}
+# Populated by build_title_maps() — plane_page_id → full URL.
+PLANE_ID_TO_URL: dict = {}
+# Populated by build_title_maps() — plane_page_id → sorted list of child page ids.
+PLANE_CHILDREN: dict = {}
+# Set by main() before each page's convert_page_body call; read by convert_macro
+# to render children/pagetree macros into a real child-page list.
+_CURRENT_PAGE_ID: str | None = None
 # Populated by build_cid_to_plane() at main() — for Confluence pageId → Plane URL resolution
 CID_TO_PLANE_URL: dict = {}
 
@@ -113,23 +120,35 @@ def build_title_maps(cur):
                 if cid and title:
                     title_to_cid[(space, title)] = int(cid)
                     title_to_cid[(None, title)] = int(cid)  # fallback w/o space
-    # cid → plane page info, pid → name
+    # cid → plane page info, pid → name / URL, parent_id → [children]
     cur.execute(
-        "SELECT pages.external_id, pages.id::text, pp.project_id::text, pages.name FROM pages "
+        "SELECT pages.external_id, pages.id::text, pp.project_id::text, pages.name, "
+        "pages.parent_id::text, pages.sort_order FROM pages "
         "LEFT JOIN project_pages pp ON pp.page_id = pages.id "
         "WHERE pages.external_source='confluence' AND pages.deleted_at IS NULL"
     )
     cid_to_plane = {}
-    global PLANE_ID_TO_NAME
+    global PLANE_ID_TO_NAME, PLANE_ID_TO_URL, PLANE_CHILDREN
     PLANE_ID_TO_NAME = {}
-    for ext, pid, proj, name in cur.fetchall():
+    PLANE_ID_TO_URL = {}
+    PLANE_CHILDREN = {}
+    # Collect (parent, sort_order, pid) so we can sort children by order.
+    _children_tmp: dict[str, list] = {}
+    for ext, pid, proj, name, parent_id, sort_order in cur.fetchall():
         if name:
             PLANE_ID_TO_NAME[pid] = name
+        if proj:
+            PLANE_ID_TO_URL[pid] = f"{PLANE_BASE}/{WORKSPACE_SLUG}/projects/{proj}/pages/{pid}/"
+        if parent_id and parent_id != "None":
+            _children_tmp.setdefault(parent_id, []).append((sort_order or 0, name or "", pid))
         try:
             cid = int(ext)
         except (TypeError, ValueError):
             continue
         cid_to_plane[cid] = (pid, proj)
+    for parent_id, rows in _children_tmp.items():
+        rows.sort()
+        PLANE_CHILDREN[parent_id] = [pid for _, _, pid in rows]
 
     global TITLE_TO_PLANE_URL, CID_TO_PLANE_URL
     TITLE_TO_PLANE_URL = {}
@@ -358,13 +377,29 @@ def convert_macro(attrs: str, inner: str, asset_map: dict) -> str:
             )
         return ""
 
-    # children / pagetree → note pointing to sidebar
+    # children / pagetree → render the current page's direct children as a
+    # bullet list of links. This replaces a misleading "check the sidebar"
+    # note that didn't reflect where Plane actually shows subpages.
     if name in {"children", "pagetree", "pagetreesearch"}:
-        return (
-            f'<p class="{P_CLASS}">'
-            f'<em>※ サブページ一覧はサイドバーまたはページツリーで確認してください。</em>'
-            f"</p>"
-        )
+        if not _CURRENT_PAGE_ID:
+            return ""
+        kids = PLANE_CHILDREN.get(_CURRENT_PAGE_ID, [])
+        if not kids:
+            return ""
+        items = []
+        for kid in kids:
+            kname = PLANE_ID_TO_NAME.get(kid) or kid
+            kurl = PLANE_ID_TO_URL.get(kid)
+            if not kurl:
+                continue
+            items.append(
+                f'<li class="editor-list-item-block">'
+                f'<p class="{P_CLASS}"><a href="{kurl}">{html_mod.escape(kname)}</a></p>'
+                f"</li>"
+            )
+        if not items:
+            return ""
+        return f'<ul class="editor-list-block">{"".join(items)}</ul>'
 
     # anchor macro — emits nothing visible (TipTap auto-adds heading anchors)
     if name == "anchor":
@@ -860,6 +895,8 @@ def main():
             space = ext_to_space.get(ext)
             # Per-page asset map: same-page PAGE_DESCRIPTION wins, then global priority
             per_page_map = build_page_asset_map(cur, page_id, asset_map)
+            global _CURRENT_PAGE_ID
+            _CURRENT_PAGE_ID = page_id
             new_html = convert_page_body(body, per_page_map, space)
             # Drop lingering migration-footer markers/content
             new_html = re.sub(
