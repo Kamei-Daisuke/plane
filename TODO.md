@@ -1,4 +1,12 @@
-# TODO — keis 本番デプロイ後の移行積み残し
+# TODO — keis 本番デプロイ後の移行積み残し（2026-04-21 更新）
+
+## 現状サマリ（v7 bulk reconvert 後）
+
+- `reconvert_pages_with_callouts_bulk.py` が唯一のマスタースクリプト
+- **4588 ページ**を Confluence source から完全再変換済み
+- 対応マクロ: info/note/tip/warning/toc/jira/expand/include/panel/status/code/view-file/excel/spreadsheets/viewppt/viewxls/viewdoc/viewpdf/children/pagetree/pagetreesearch/anchor + ac:link + task-list
+- Confluence URL → Plane URL 解決をスクリプト内に統合済（再実行してもデグレしない）
+- 意図的に drop: change-history/recently-updated/contributors/gadget/roadmap/attachments 等の動的 widget
 
 ## 未対応
 

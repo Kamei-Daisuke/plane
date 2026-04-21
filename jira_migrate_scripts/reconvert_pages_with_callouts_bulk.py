@@ -47,6 +47,36 @@ ICON_BY_TYPE = {"info": "128161", "note": "128221", "tip": "128161", "warning": 
 
 # Populated by build_title_maps() at main()
 TITLE_TO_PLANE_URL: dict = {}
+# Populated by build_cid_to_plane() at main() — for Confluence pageId → Plane URL resolution
+CID_TO_PLANE_URL: dict = {}
+
+
+def resolve_confluence_url(url: str) -> str:
+    """Convert a Confluence URL to the equivalent Plane URL if possible."""
+    if "confluence.aruhi-corp.co.jp" not in url:
+        return url
+    deamp = url.replace("&amp;", "&")
+    # pageId=XXX pattern
+    import re as _re
+
+    m = _re.search(r"[?&]pageId=(\d+)", deamp)
+    if m:
+        try:
+            cid = int(m.group(1))
+        except ValueError:
+            return url
+        plane = CID_TO_PLANE_URL.get(cid)
+        return plane if plane else url
+    # /display/<SPACE>/<Title>
+    m = _re.search(r"/display/([^/]+)/([^?#&\s]+)", deamp)
+    if m:
+        import urllib.parse
+
+        space = m.group(1)
+        title = urllib.parse.unquote_plus(m.group(2))
+        plane = TITLE_TO_PLANE_URL.get((space, title)) or TITLE_TO_PLANE_URL.get((None, title))
+        return plane if plane else url
+    return url
 
 
 def build_title_maps(cur):
@@ -92,15 +122,18 @@ def build_title_maps(cur):
             continue
         cid_to_plane[cid] = (pid, proj)
 
-    global TITLE_TO_PLANE_URL
+    global TITLE_TO_PLANE_URL, CID_TO_PLANE_URL
     TITLE_TO_PLANE_URL = {}
+    CID_TO_PLANE_URL = {}
     for (space, title), cid in title_to_cid.items():
         if cid not in cid_to_plane:
             continue
         pid, proj = cid_to_plane[cid]
         if not proj:
             continue
-        TITLE_TO_PLANE_URL[(space, title)] = f"{PLANE_BASE}/{WORKSPACE_SLUG}/projects/{proj}/pages/{pid}/"
+        url = f"{PLANE_BASE}/{WORKSPACE_SLUG}/projects/{proj}/pages/{pid}/"
+        TITLE_TO_PLANE_URL[(space, title)] = url
+        CID_TO_PLANE_URL[cid] = url
     return len(TITLE_TO_PLANE_URL)
 
 
@@ -279,6 +312,54 @@ def convert_macro(attrs: str, inner: str, asset_map: dict) -> str:
             return ""
         return f'<strong>[{html_mod.escape(title)}]</strong>'
 
+    # File embed macros (view-file, excel, spreadsheets, viewxls, viewppt)
+    # → link to the attached file
+    if name in {"view-file", "excel", "spreadsheets", "viewxls", "viewppt", "viewdoc", "viewpdf"}:
+        # file attachment reference
+        att_m = re.search(r'<ri:attachment\b([^/]*)/>', inner)
+        if att_m:
+            fn_m = re.search(r'ri:filename="([^"]+)"', att_m.group(1))
+            if fn_m:
+                fname = norm(html_mod.unescape(fn_m.group(1)))
+                aid = asset_map.get(fname)
+                icon = "📊" if name in {"excel", "spreadsheets", "viewxls"} else (
+                    "📽" if name == "viewppt" else "📄"
+                )
+                if aid:
+                    url = f"{PLANE_BASE}/api/assets/v2/workspaces/{WORKSPACE_SLUG}/{aid}/"
+                    return (
+                        f'<p class="{P_CLASS}">{icon} '
+                        f'<a href="{url}" target="_blank" rel="noopener noreferrer">'
+                        f'{html_mod.escape(fname)}</a></p>'
+                    )
+                return (
+                    f'<p class="{P_CLASS}">{icon} '
+                    f'<em>未解決 embed: {html_mod.escape(fname)}</em></p>'
+                )
+        return ""
+
+    # children / pagetree → note pointing to sidebar
+    if name in {"children", "pagetree", "pagetreesearch"}:
+        return (
+            f'<p class="{P_CLASS}">'
+            f'<em>※ サブページ一覧はサイドバーまたはページツリーで確認してください。</em>'
+            f"</p>"
+        )
+
+    # anchor macro — emits nothing visible (TipTap auto-adds heading anchors)
+    if name == "anchor":
+        return ""
+
+    # Pure dynamic widgets → drop silently
+    if name in {
+        "change-history", "recently-updated", "contributors",
+        "content-report-table", "tasks-report-macro", "contentbylabel",
+        "livesearch", "listlabels", "blog-posts", "calendar",
+        "create-from-template", "roadmap", "profile-picture",
+        "jirachart", "gadget", "attachments",
+    }:
+        return ""
+
     if name in CODE_MACRO_NAMES:
         lang_m = re.search(r'<ac:parameter[^>]*ac:name="language">([^<]+)', inner)
         lang = lang_m.group(1).strip() if lang_m else ""
@@ -393,6 +474,7 @@ def convert_ac_links(h: str, asset_map: dict, current_space: str | None = None) 
             url_m = re.search(r'ri:value="([^"]+)"', a)
             if url_m:
                 url = html_mod.unescape(url_m.group(1))
+                url = resolve_confluence_url(url)
                 text = extract_text(inner, url)
                 return f'<a href="{url}" target="_blank" rel="noopener noreferrer">{text}</a>'
 
@@ -510,16 +592,32 @@ def build_page_asset_map(cur, page_id: str, global_map: dict) -> dict:
     return merged
 
 
+def rewrite_plain_confluence_hrefs(h: str) -> str:
+    """Post-process any plain <a href="https://confluence..."> (not wrapped
+    in ac:link) to their Plane equivalent."""
+    def repl(m):
+        tag = m.group(0)
+        url = m.group(1)
+        new_url = resolve_confluence_url(html_mod.unescape(url))
+        if new_url == url:
+            return tag
+        return tag.replace(url, html_mod.escape(new_url))
+
+    return re.sub(r'<a\b[^>]*href="([^"]+)"[^>]*>', repl, h)
+
+
 def convert_page_body(body: str, asset_map: dict, space: str | None = None) -> str:
     # Order matters:
     #   1. ac:link → <a> (before ac: strip in finalize_html)
     #   2. ac:task-list → TipTap tasklist
     #   3. Macros (info, expand, code, etc.)
     #   4. Finalize (images, layout strip, class decoration)
+    #   5. Rewrite any remaining Confluence hrefs to Plane URLs
     body = convert_ac_links(body, asset_map, space)
     body = convert_task_lists(body)
     converted = convert_all_macros(body, asset_map)
-    return finalize_html(converted, asset_map)
+    finalized = finalize_html(converted, asset_map)
+    return rewrite_plain_confluence_hrefs(finalized)
 
 
 def main():
@@ -575,7 +673,9 @@ def main():
     updates = []
     stats = defaultdict(int)
     HAS_TARGET = re.compile(
-        r'ac:name="(info|note|tip|warning|toc|jira|expand|include|panel|status)"'
+        r'ac:name="(info|note|tip|warning|toc|jira|expand|include|panel|status'
+        r'|view-file|excel|spreadsheets|viewxls|viewppt|viewdoc|viewpdf'
+        r'|children|pagetree|pagetreesearch|anchor)"'
         r'|<ac:task-list\b|<ac:link\b'
     )
 
