@@ -176,6 +176,40 @@ def convert_all_macros(fragment: str, asset_map: dict) -> str:
     return "".join(out)
 
 
+def convert_task_lists(h: str) -> str:
+    """Convert <ac:task-list>…</ac:task-list> with <ac:task> children to
+    TipTap task list format (<ul data-type="taskList"><li data-checked="…">)."""
+    TASK_LIST_RE = re.compile(r"<ac:task-list[^>]*>(.*?)</ac:task-list>", re.DOTALL)
+    TASK_RE = re.compile(r"<ac:task\b[^>]*>(.*?)</ac:task>", re.DOTALL)
+    STATUS_RE = re.compile(r"<ac:task-status>([^<]+)</ac:task-status>")
+    BODY_RE = re.compile(r"<ac:task-body[^>]*>(.*?)</ac:task-body>", re.DOTALL)
+
+    def strip_task_id(inner):
+        return re.sub(r"<ac:task-id>[^<]*</ac:task-id>", "", inner)
+
+    def repl_list(m):
+        inner = strip_task_id(m.group(1))
+        items = []
+        for tm in TASK_RE.finditer(inner):
+            task_inner = tm.group(1)
+            status = (STATUS_RE.search(task_inner) or re.match("", "")).group(1) if STATUS_RE.search(task_inner) else "incomplete"
+            body_m = BODY_RE.search(task_inner)
+            body_html = body_m.group(1).strip() if body_m else ""
+            # Unwrap trivial <pre> / <div> wrappers and convert to <p>
+            body_html = re.sub(r"^<div[^>]*>|</div>$", "", body_html).strip()
+            if body_html.startswith("<pre"):
+                inner_pre = re.sub(r"<pre[^>]*>|</pre>", "", body_html)
+                body_html = html_mod.escape(inner_pre.strip())
+                body_html = f'<p class="{P_CLASS}">{body_html}</p>'
+            elif not body_html.startswith("<p"):
+                body_html = f'<p class="{P_CLASS}">{body_html}</p>'
+            checked = "true" if status.lower() == "complete" else "false"
+            items.append(f'<li data-checked="{checked}" data-type="taskItem">{body_html}</li>')
+        return '<ul data-type="taskList">' + "".join(items) + "</ul>"
+
+    return TASK_LIST_RE.sub(repl_list, h)
+
+
 def finalize_html(h: str, asset_map: dict) -> str:
     # Images
     def replace_image(m):
@@ -218,6 +252,8 @@ def finalize_html(h: str, asset_map: dict) -> str:
 
 
 def convert_page_body(body: str, asset_map: dict) -> str:
+    # Task-list conversion must happen BEFORE the generic ac: strip
+    body = convert_task_lists(body)
     converted = convert_all_macros(body, asset_map)
     return finalize_html(converted, asset_map)
 
@@ -248,7 +284,7 @@ def main():
 
     updates = []
     stats = defaultdict(int)
-    HAS_CALLOUT_MACRO = re.compile(r'ac:name="(info|note|tip|warning)"')
+    HAS_TARGET = re.compile(r'ac:name="(info|note|tip|warning)"|<ac:task-list\b')
 
     with open(CONF, "r", encoding="utf-8") as f:
         for line in f:
@@ -261,7 +297,7 @@ def main():
             except Exception:
                 stats["decode_error"] += 1
                 continue
-            if not HAS_CALLOUT_MACRO.search(body):
+            if not HAS_TARGET.search(body):
                 continue
             page_id = ext_to_plane.get(ext)
             if not page_id:
@@ -278,12 +314,14 @@ def main():
                 flags=re.DOTALL,
             )
             callout_count = new_html.count('data-block-type="callout-component"')
-            if callout_count == 0:
-                stats["no_callouts_produced"] += 1
+            task_list_count = new_html.count('data-type="taskList"')
+            if callout_count == 0 and task_list_count == 0:
+                stats["no_content_produced"] += 1
                 continue
-            updates.append((page_id, new_html, callout_count))
+            updates.append((page_id, new_html, callout_count + task_list_count))
             stats["pages"] += 1
             stats["callouts"] += callout_count
+            stats["task_lists"] += task_list_count
 
     print("Stats:", file=sys.stderr)
     for k, v in sorted(stats.items()):
