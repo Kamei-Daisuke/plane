@@ -135,10 +135,6 @@ def main():
             continue
 
         html = page.description_html or ""
-        if FOOTER_MARKER in html:
-            stats["skip_already_injected"] += 1
-            continue
-
         new_html = html
         injected = 0
         unresolved = []
@@ -160,40 +156,69 @@ def main():
             asset_id = asset_ids[0]
             abs_url = f"{PLANE_BASE}/api/assets/v2/workspaces/{WORKSPACE_SLUG}/{asset_id}/"
 
-            # Find preceding heading in source and locate it in HTML
-            heading = find_preceding_heading(body, m.start())
-            if heading is None:
-                stats["no_preceding_heading"] += 1
-                continue
-            heading_text, _level = heading
-            if not heading_text:
-                stats["empty_heading"] += 1
+            # Idempotent: skip if this asset URL is already in HTML as image-component
+            if f'image-component src="{abs_url}"' in new_html:
+                stats["already_injected_skip"] += 1
                 continue
 
-            # Find heading in HTML (any h1-h6 since level may differ)
-            esc_text = re.escape(heading_text)
-            heading_pat = re.compile(
-                r'(<h[1-6][^>]*class="editor-heading-block"[^>]*>\s*(?:<strong>)?\s*'
-                + esc_text
-                + r'\s*(?:</strong>)?\s*</h[1-6]>)'
-                r'(\s*<div[^>]*horizontalRule[^>]*><div></div></div>)?'
-            )
-            hm = heading_pat.search(new_html)
-            if hm is None:
-                stats["heading_not_in_html"] += 1
-                unresolved.append(f"{page.id}: heading {heading_text!r} not found in HTML")
+            hm_end = None
+
+            # Strategy 1: preceding heading match
+            heading = find_preceding_heading(body, m.start())
+            if heading is not None:
+                heading_text, _level = heading
+                if heading_text:
+                    for hm in re.finditer(r"<(h[1-6])[^>]*>(.*?)</\1>", new_html, re.DOTALL):
+                        inner_text = norm(
+                            html_mod.unescape(re.sub(r"<[^>]+>", "", hm.group(2)).strip())
+                        )
+                        if inner_text == heading_text:
+                            hm_end = hm.end()
+                            hr_m = re.match(
+                                r'\s*<div[^>]*horizontalRule[^>]*><div></div></div>',
+                                new_html[hm_end:],
+                            )
+                            if hr_m:
+                                hm_end += hr_m.end()
+                            stats["anchor_heading"] += 1
+                            break
+
+            # Strategy 2: preceding paragraph text substring match
+            if hm_end is None:
+                # Pull last <p>...</p> before gliffy in source and try to
+                # find that paragraph text (stripped) in the Plane HTML.
+                window_start = max(0, m.start() - 800)
+                window = body[window_start:m.start()]
+                para_iter = list(re.finditer(r"<p[^>]*>(.*?)</p>", window, re.DOTALL))
+                for pm in reversed(para_iter):
+                    ptext = norm(
+                        html_mod.unescape(re.sub(r"<[^>]+>", "", pm.group(1)).strip())
+                    )
+                    if len(ptext) < 6:  # too short, skip
+                        continue
+                    # Cap to first 60 chars for anchor
+                    anchor = ptext[:60]
+                    esc = re.escape(anchor)
+                    # look for <p ...>anchor...</p> in Plane HTML
+                    hm2 = re.search(
+                        r'<p[^>]*>[^<]*' + esc + r'[^<]*</p>', new_html
+                    )
+                    if hm2:
+                        hm_end = hm2.end()
+                        stats["anchor_paragraph"] += 1
+                        break
+
+            if hm_end is None:
+                stats["no_anchor"] += 1
+                unresolved.append(f"{page.id}: no anchor for gliffy {diag_name!r}")
                 continue
 
             img_tag = make_image_tag(asset_id, abs_url)
-            # Insert after the matched block (heading + optional hr)
-            end = hm.end()
-            new_html = new_html[:end] + img_tag + new_html[end:]
+            new_html = new_html[:hm_end] + img_tag + new_html[hm_end:]
             injected += 1
             stats["injected"] += 1
 
         if injected > 0:
-            # Put marker at end
-            new_html = new_html + FOOTER_MARKER
             updates.append((str(page.id), new_html, injected))
         if unresolved:
             for u in unresolved[:3]:
