@@ -47,6 +47,9 @@ ICON_BY_TYPE = {"info": "128161", "note": "128221", "tip": "128161", "warning": 
 
 # Populated by build_title_maps() at main()
 TITLE_TO_PLANE_URL: dict = {}
+# Populated by build_title_maps() — plane_page_id → Plane page name (used for link
+# text when an author pasted a bare URL and we want a human-readable label).
+PLANE_ID_TO_NAME: dict = {}
 # Populated by build_cid_to_plane() at main() — for Confluence pageId → Plane URL resolution
 CID_TO_PLANE_URL: dict = {}
 
@@ -108,14 +111,18 @@ def build_title_maps(cur):
                 if cid and title:
                     title_to_cid[(space, title)] = int(cid)
                     title_to_cid[(None, title)] = int(cid)  # fallback w/o space
-    # cid → plane page info
+    # cid → plane page info, pid → name
     cur.execute(
-        "SELECT pages.external_id, pages.id::text, pp.project_id::text FROM pages "
+        "SELECT pages.external_id, pages.id::text, pp.project_id::text, pages.name FROM pages "
         "LEFT JOIN project_pages pp ON pp.page_id = pages.id "
         "WHERE pages.external_source='confluence' AND pages.deleted_at IS NULL"
     )
     cid_to_plane = {}
-    for ext, pid, proj in cur.fetchall():
+    global PLANE_ID_TO_NAME
+    PLANE_ID_TO_NAME = {}
+    for ext, pid, proj, name in cur.fetchall():
+        if name:
+            PLANE_ID_TO_NAME[pid] = name
         try:
             cid = int(ext)
         except (TypeError, ValueError):
@@ -491,9 +498,14 @@ def convert_ac_links(h: str, asset_map: dict, current_space: str | None = None) 
             a = ri_url.group(1)
             url_m = re.search(r'ri:value="([^"]+)"', a)
             if url_m:
-                url = html_mod.unescape(url_m.group(1))
-                url = resolve_confluence_url(url)
+                orig_url = html_mod.unescape(url_m.group(1))
+                url = resolve_confluence_url(orig_url)
                 text = extract_text(inner, url)
+                # If body text is the bare original URL, prefer the target
+                # Plane page's title (falling back to the new URL) so migrated
+                # links read naturally instead of showing stale URLs.
+                if html_mod.unescape(text).strip() == orig_url:
+                    text = html_mod.escape(_link_label_for_url(url))
                 return f'<a href="{url}" target="_blank" rel="noopener noreferrer">{text}</a>'
 
         if ri_att:
@@ -684,18 +696,53 @@ def build_page_asset_map(cur, page_id: str, global_map: dict) -> dict:
     return merged
 
 
+_PLANE_PAGE_URL_RE = re.compile(
+    r"/pages/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/?"
+)
+
+
+def _link_label_for_url(new_url: str) -> str:
+    """Return the Plane page name if new_url points at one, else the URL itself."""
+    m = _PLANE_PAGE_URL_RE.search(new_url)
+    if m:
+        name = PLANE_ID_TO_NAME.get(m.group(1))
+        if name:
+            return name
+    return new_url
+
+
 def rewrite_plain_confluence_hrefs(h: str) -> str:
-    """Post-process any plain <a href="https://confluence..."> (not wrapped
-    in ac:link) to their Plane equivalent."""
+    """Post-process any plain <a href="https://confluence...">text</a>.
+    Rewrites href to the Plane equivalent. If the visible text is the bare
+    old URL (common authoring pattern: pasted URL as both href and text),
+    rewrites the text to the target Plane page's title (or the new URL if
+    the target is not a Plane page), so users don't see stale confluence.aruhi
+    URLs pointing to Plane pages."""
     def repl(m):
-        tag = m.group(0)
+        full = m.group(0)
         url = m.group(1)
+        inner = m.group(2)
         new_url = resolve_confluence_url(html_mod.unescape(url))
         if new_url == url:
-            return tag
-        return tag.replace(url, html_mod.escape(new_url))
+            return full
+        new_full = full.replace(url, html_mod.escape(new_url), 1)
+        if html_mod.unescape(inner).strip() == html_mod.unescape(url).strip():
+            label = _link_label_for_url(new_url)
+            new_full = re.sub(
+                r"(<a\b[^>]*>).*?(</a>)",
+                lambda mm: mm.group(1) + html_mod.escape(label) + mm.group(2),
+                new_full,
+                count=1,
+                flags=re.DOTALL,
+            )
+        return new_full
 
-    return re.sub(r'<a\b[^>]*href="([^"]+)"[^>]*>', repl, h)
+    return re.sub(
+        r'<a\b[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+        repl,
+        h,
+        flags=re.DOTALL,
+    )
 
 
 def convert_page_body(body: str, asset_map: dict, space: str | None = None) -> str:
