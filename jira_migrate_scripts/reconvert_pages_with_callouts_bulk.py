@@ -61,8 +61,11 @@ PLANE_CHILDREN: dict = {}
 # project and should be rewritten to /browse/GUDO-4/.
 PLANE_PROJECT_IDENTIFIERS: set = set()
 # Set by main() before each page's convert_page_body call; read by convert_macro
-# to render children/pagetree macros into a real child-page list.
+# to render children/pagetree macros into a real child-page list, and by
+# resolve_confluence_url to rewrite /download/attachments URLs via the
+# per-page asset map.
 _CURRENT_PAGE_ID: str | None = None
+_CURRENT_ASSET_MAP: dict | None = None
 # Populated by build_cid_to_plane() at main() — for Confluence pageId → Plane URL resolution
 CID_TO_PLANE_URL: dict = {}
 
@@ -80,6 +83,20 @@ def resolve_confluence_url(url: str) -> str:
             return f"{PLANE_BASE}/{WORKSPACE_SLUG}/browse/{jira_m.group(1)}-{jira_m.group(2)}/"
         return url
     if "confluence.aruhi-corp.co.jp" not in url:
+        return url
+    # /download/attachments/PAGE_ID/FILENAME(?params) → Plane file_asset URL
+    dl_m = re.search(
+        r"confluence\.aruhi-corp\.co\.jp/download/attachments/\d+/([^?\s\"']+)",
+        url,
+    )
+    if dl_m:
+        import urllib.parse as _urlparse
+
+        fname = norm(_urlparse.unquote(dl_m.group(1)))
+        if _CURRENT_ASSET_MAP is not None:
+            aid = _CURRENT_ASSET_MAP.get(fname)
+            if aid:
+                return f"{PLANE_BASE}/api/assets/v2/workspaces/{WORKSPACE_SLUG}/{aid}/"
         return url
     deamp = url.replace("&amp;", "&")
     # pageId=XXX pattern
@@ -810,12 +827,25 @@ def rewrite_plain_confluence_hrefs(h: str) -> str:
             )
         return new_full
 
-    return re.sub(
+    h = re.sub(
         r'<a\b[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
         repl,
         h,
         flags=re.DOTALL,
     )
+
+    # Also rewrite <img src="https://confluence.../download/attachments/...">.
+    # These bypass <ac:image>, usually because the author pasted the raw URL.
+    def _img_repl(m):
+        tag = m.group(0)
+        src = m.group(1)
+        new_src = resolve_confluence_url(html_mod.unescape(src))
+        if new_src == src:
+            return tag
+        return tag.replace(src, html_mod.escape(new_src), 1)
+
+    h = re.sub(r'<img\b[^>]*src="([^"]+)"[^>]*/?>', _img_repl, h)
+    return h
 
 
 def convert_page_body(body: str, asset_map: dict, space: str | None = None) -> str:
@@ -920,8 +950,9 @@ def main():
             space = ext_to_space.get(ext)
             # Per-page asset map: same-page PAGE_DESCRIPTION wins, then global priority
             per_page_map = build_page_asset_map(cur, page_id, asset_map)
-            global _CURRENT_PAGE_ID
+            global _CURRENT_PAGE_ID, _CURRENT_ASSET_MAP
             _CURRENT_PAGE_ID = page_id
+            _CURRENT_ASSET_MAP = per_page_map
             new_html = convert_page_body(body, per_page_map, space)
             # Drop lingering migration-footer markers/content
             new_html = re.sub(
