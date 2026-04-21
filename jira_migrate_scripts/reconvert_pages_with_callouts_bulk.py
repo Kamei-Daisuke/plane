@@ -220,32 +220,36 @@ def convert_macro(attrs: str, inner: str, asset_map: dict) -> str:
             )
         return f'<p class="{P_CLASS}"><em>🎫 元 Jira 埋め込み（情報不足で復元不可）</em></p>'
 
-    # include → link to included page
+    # include → link to included page. The nested ac:link was already
+    # rewritten to <a href> by convert_ac_links(); re-use that link.
     if name == "include":
-        include_link_m = re.search(
-            r'<ac:link[^>]*>\s*<ri:page\b([^/]*)/>', inner, re.DOTALL
-        )
-        if include_link_m:
-            a = include_link_m.group(1)
-            title_m = re.search(r'ri:content-title="([^"]+)"', a)
-            space_m = re.search(r'ri:space-key="([^"]+)"', a)
-            title = html_mod.unescape(title_m.group(1)) if title_m else None
-            space = space_m.group(1) if space_m else None
-            if title:
-                url = TITLE_TO_PLANE_URL.get((space, title)) or TITLE_TO_PLANE_URL.get((None, title))
-                display = html_mod.escape(title)
-                if url:
-                    return (
-                        f'<p class="{P_CLASS}">'
-                        f'📄 <a href="{url}">{display}</a>'
-                        f" <em>(元 Confluence の include マクロ)</em>"
-                        f"</p>"
-                    )
-                return (
-                    f'<p class="{P_CLASS}">'
-                    f"📄 <em>未解決 include: {display}</em>"
-                    f"</p>"
-                )
+        a_m = re.search(r'<a\b[^>]*href="([^"]+)"[^>]*>(.*?)</a>', inner, re.DOTALL)
+        if a_m:
+            href = a_m.group(1)
+            text = a_m.group(2).strip()
+            return (
+                f'<p class="{P_CLASS}">'
+                f'📄 <a href="{href}">{text}</a>'
+                f' <em>(元 Confluence の include マクロ)</em>'
+                f"</p>"
+            )
+        # Unresolved span (ac:link that didn't resolve)
+        span_m = re.search(r'<span[^>]*title="未解決[^"]*"[^>]*>(.*?)</span>', inner, re.DOTALL)
+        if span_m:
+            return (
+                f'<p class="{P_CLASS}">'
+                f'📄 <em>未解決 include: {span_m.group(1).strip()}</em>'
+                f"</p>"
+            )
+        # Still fall back to raw scan (robust)
+        rp = re.search(r'ri:content-title="([^"]+)"', inner)
+        if rp:
+            title = html_mod.unescape(rp.group(1))
+            return (
+                f'<p class="{P_CLASS}">'
+                f'📄 <em>未解決 include: {html_mod.escape(title)}</em>'
+                f"</p>"
+            )
         return ""
 
     # expand → bold title + content
