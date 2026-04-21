@@ -350,6 +350,24 @@ def convert_macro(attrs: str, inner: str, asset_map: dict) -> str:
     if name == "anchor":
         return ""
 
+    # gliffy → image-component referencing the uploaded PNG preview
+    if name == "gliffy":
+        diag_name_m = re.search(
+            r'<ac:parameter\s+ac:name="name">([^<]+)</ac:parameter>', inner
+        )
+        if not diag_name_m:
+            return ""
+        diag_name = norm(html_mod.unescape(diag_name_m.group(1).strip()))
+        aid = asset_map.get(norm(diag_name + ".png"))
+        if not aid:
+            return f'<p class="{P_CLASS}"><em>🖼 未解決 Gliffy: {html_mod.escape(diag_name)}</em></p>'
+        abs_url = f"{PLANE_BASE}/api/assets/v2/workspaces/{WORKSPACE_SLUG}/{aid}/"
+        new_id = str(uuidlib.uuid4())
+        return (
+            f'<image-component src="{abs_url}" id="{new_id}" data-id="{new_id}" '
+            f'width="80%" height="auto" alignment="center" status="uploaded"></image-component>'
+        )
+
     # Pure dynamic widgets → drop silently
     if name in {
         "change-history", "recently-updated", "contributors",
@@ -566,6 +584,80 @@ def finalize_html(h: str, asset_map: dict) -> str:
     h = re.sub(r"</?ac:[a-z-]+[^>]*>", "", h)
     h = re.sub(r"</?ri:[a-z-]+[^>]*/?>", "", h)
 
+    # Table: always assign colwidth = EDITOR_WIDTH / num_cols so the editor
+    # renders full-width tables. Handles nested tables correctly by processing
+    # innermost tables first via a placeholder round-trip.
+    EDITOR_WIDTH = 720
+
+    def _process_table_inner(table_body: str) -> str:
+        first_row = re.search(r'<tr[^>]*>(.*?)</tr>', table_body, re.DOTALL)
+        if not first_row:
+            return f"<table>{table_body}</table>"
+        num_cols = len(re.findall(r"<t[hd]\b", first_row.group(1)))
+        if num_cols == 0:
+            return f"<table>{table_body}</table>"
+        col_w = max(50, EDITOR_WIDTH // num_cols)
+
+        def _add_colwidth(cell_m):
+            tag = cell_m.group(0)
+            if "colwidth" in tag:
+                return tag
+            return tag[:-1] + f' colwidth="{col_w}">'
+
+        new_body = re.sub(r"<(t[hd])\b([^>]*)>", _add_colwidth, table_body)
+        return f"<table>{new_body}</table>"
+
+    table_tokens: list[str] = []
+    INNER_TABLE_RE = re.compile(
+        r"<table([^>]*)>((?:(?!<table).)*?)</table>", re.DOTALL
+    )
+    while True:
+        m = INNER_TABLE_RE.search(h)
+        if not m:
+            break
+        processed = _process_table_inner(m.group(2))
+        token = f"\x00TBL{len(table_tokens)}\x00"
+        table_tokens.append(processed)
+        h = h[: m.start()] + token + h[m.end() :]
+    for i in range(len(table_tokens) - 1, -1, -1):
+        h = h.replace(f"\x00TBL{i}\x00", table_tokens[i])
+
+    # hr → TipTap horizontalRule div (otherwise raw <hr> disrupts block nesting)
+    h = re.sub(
+        r"<hr\s*/?>",
+        '<div class="py-4 border-strong-1" data-type="horizontalRule"><div></div></div>',
+        h,
+    )
+
+    # Color span: <span ... style="...color..."> → <span data-text-color/data-background-color>
+    # Without this, zeed-dom (server-side TipTap DOM) breaks parseHTML on styled
+    # spans (tiptap #5352) → colored text/highlights lose their formatting.
+    # Matches style attribute regardless of position; preserves other attrs.
+    def _fix_color_span(m):
+        before = m.group(1)
+        style = m.group(2)
+        after = m.group(3)
+        color_m = re.search(r'(?:^|;|\s)color:\s*([^;]+)', style)
+        bg_m = re.search(r'background-color:\s*([^;]+)', style)
+        if not (color_m or bg_m):
+            return m.group(0)
+        data = ""
+        if color_m:
+            data += f' data-text-color="{html_mod.escape(color_m.group(1).strip())}"'
+        if bg_m:
+            data += f' data-background-color="{html_mod.escape(bg_m.group(1).strip())}"'
+        other = (before + after).strip()
+        other = re.sub(r"\s+", " ", other)
+        if other:
+            return f"<span {other}{data}>"
+        return f"<span{data}>"
+
+    h = re.sub(
+        r'<span\b([^>]*?)style="([^"]*(?:color|background)[^"]*)"([^>]*?)>',
+        _fix_color_span,
+        h,
+    )
+
     # Editor classes
     h = re.sub(r"<h([1-6])>", r'<h\1 class="' + H_CLASS + r'">', h)
     h = re.sub(r"<p>", f'<p class="{P_CLASS}">', h)
@@ -621,8 +713,15 @@ def convert_page_body(body: str, asset_map: dict, space: str | None = None) -> s
 
 
 def main():
-    dry_run = "--apply" not in sys.argv
-    target_ids = [a for a in sys.argv[1:] if a != "--apply"]
+    args = sys.argv[1:]
+    dry_run = "--apply" not in args
+    dump_path = None
+    if "--dump" in args:
+        i = args.index("--dump")
+        if i + 1 < len(args):
+            dump_path = args[i + 1]
+            args = args[:i] + args[i + 2 :]
+    target_ids = [a for a in args if a != "--apply"]
 
     cur = connection.cursor()
     # Priority order: PAGE_DESCRIPTION > COMMENT_DESCRIPTION > others
@@ -675,8 +774,8 @@ def main():
     HAS_TARGET = re.compile(
         r'ac:name="(info|note|tip|warning|toc|jira|expand|include|panel|status'
         r'|view-file|excel|spreadsheets|viewxls|viewppt|viewdoc|viewpdf'
-        r'|children|pagetree|pagetreesearch|anchor)"'
-        r'|<ac:task-list\b|<ac:link\b'
+        r'|children|pagetree|pagetreesearch|anchor|gliffy)"'
+        r'|<ac:task-list\b|<ac:link\b|<table\b'
     )
 
     with open(CONF, "r", encoding="utf-8") as f:
@@ -726,6 +825,13 @@ def main():
     for k, v in sorted(stats.items()):
         print(f"  {k}: {v}", file=sys.stderr)
     print(f"\n{'Would update' if dry_run else 'Updating'} {len(updates)} pages", file=sys.stderr)
+
+    if dump_path:
+        with open(dump_path, "w", encoding="utf-8") as out:
+            for pid, new_html, _ in updates:
+                out.write(json.dumps({"id": pid, "html": new_html}, ensure_ascii=False) + "\n")
+        print(f"Wrote {len(updates)} proposed HTMLs to {dump_path}", file=sys.stderr)
+        return
 
     if dry_run:
         for pid, _, n in updates[:5]:
