@@ -39,8 +39,10 @@ JIRA_BASE = os.environ.get("JIRA_BASE", "https://jira.aruhi-corp.co.jp")
 P_CLASS = "editor-paragraph-block"
 H_CLASS = "editor-heading-block"
 
-STRUCTURED_OPEN_RE = re.compile(r'<ac:structured-macro\b([^>]*)>')
-STRUCTURED_OPEN_OR_CLOSE = re.compile(r'<(/?)ac:structured-macro\b[^>]*/?>')
+# Accept both `<ac:structured-macro>` (modern) and `<ac:macro>` (legacy; seen on
+# older Confluence pages, e.g. view-file embeds).
+STRUCTURED_OPEN_RE = re.compile(r'<ac:(?:structured-)?macro\b([^>]*)>')
+STRUCTURED_OPEN_OR_CLOSE = re.compile(r'<(/?)ac:(?:structured-)?macro\b[^>]*/?>')
 CALLOUT_MACRO_NAMES = {"info", "note", "tip", "warning"}
 CODE_MACRO_NAMES = {"code", "noformat"}
 ICON_BY_TYPE = {"info": "128161", "note": "128221", "tip": "128161", "warning": "9888"}
@@ -184,8 +186,10 @@ def find_structured_macro_spans(body: str):
             pos = open_m.end()
             continue
         inner_start = open_m.end()
-        # strip the actual </ac:structured-macro> at the end
-        close_m_iter = list(re.finditer(r'</ac:structured-macro\s*>', body[inner_start:end]))
+        # strip the actual </ac:(structured-)?macro> at the end
+        close_m_iter = list(
+            re.finditer(r'</ac:(?:structured-)?macro\s*>', body[inner_start:end])
+        )
         if not close_m_iter:
             pos = end
             continue
@@ -320,29 +324,38 @@ def convert_macro(attrs: str, inner: str, asset_map: dict) -> str:
         return f'<strong>[{html_mod.escape(title)}]</strong>'
 
     # File embed macros (view-file, excel, spreadsheets, viewxls, viewppt)
-    # → link to the attached file
+    # → link to the attached file.
+    # Confluence stores the filename either as a nested <ri:attachment/>
+    # reference (modern) or as an <ac:parameter ac:name="name">FILE</ac:parameter>
+    # (legacy <ac:macro> form).
     if name in {"view-file", "excel", "spreadsheets", "viewxls", "viewppt", "viewdoc", "viewpdf"}:
-        # file attachment reference
+        fname = None
         att_m = re.search(r'<ri:attachment\b([^/]*)/>', inner)
         if att_m:
             fn_m = re.search(r'ri:filename="([^"]+)"', att_m.group(1))
             if fn_m:
                 fname = norm(html_mod.unescape(fn_m.group(1)))
-                aid = asset_map.get(fname)
-                icon = "📊" if name in {"excel", "spreadsheets", "viewxls"} else (
-                    "📽" if name == "viewppt" else "📄"
-                )
-                if aid:
-                    url = f"{PLANE_BASE}/api/assets/v2/workspaces/{WORKSPACE_SLUG}/{aid}/"
-                    return (
-                        f'<p class="{P_CLASS}">{icon} '
-                        f'<a href="{url}" target="_blank" rel="noopener noreferrer">'
-                        f'{html_mod.escape(fname)}</a></p>'
-                    )
+        if not fname:
+            # Fallback: ac:parameter name
+            fname_raw = get_param(inner, "name").strip()
+            if fname_raw:
+                fname = norm(html_mod.unescape(fname_raw))
+        if fname:
+            aid = asset_map.get(fname)
+            icon = "📊" if name in {"excel", "spreadsheets", "viewxls"} else (
+                "📽" if name == "viewppt" else "📄"
+            )
+            if aid:
+                url = f"{PLANE_BASE}/api/assets/v2/workspaces/{WORKSPACE_SLUG}/{aid}/"
                 return (
                     f'<p class="{P_CLASS}">{icon} '
-                    f'<em>未解決 embed: {html_mod.escape(fname)}</em></p>'
+                    f'<a href="{url}" target="_blank" rel="noopener noreferrer">'
+                    f'{html_mod.escape(fname)}</a></p>'
                 )
+            return (
+                f'<p class="{P_CLASS}">{icon} '
+                f'<em>未解決 embed: {html_mod.escape(fname)}</em></p>'
+            )
         return ""
 
     # children / pagetree → note pointing to sidebar
@@ -372,7 +385,7 @@ def convert_macro(attrs: str, inner: str, asset_map: dict) -> str:
         new_id = str(uuidlib.uuid4())
         return (
             f'<image-component src="{abs_url}" id="{new_id}" data-id="{new_id}" '
-            f'width="80%" height="auto" alignment="center" status="uploaded"></image-component>'
+            f'width="200%" height="auto" alignment="left" status="uploaded"></image-component>'
         )
 
     # Pure dynamic widgets → drop silently
@@ -574,7 +587,7 @@ def finalize_html(h: str, asset_map: dict) -> str:
                 new_id = str(uuidlib.uuid4())
                 return (
                     f'<image-component src="{abs_url}" id="{new_id}" data-id="{new_id}" '
-                    f'width="80%" height="auto" alignment="center" status="uploaded"></image-component>'
+                    f'width="200%" height="auto" alignment="left" status="uploaded"></image-component>'
                 )
             return ""
         if url_m:
