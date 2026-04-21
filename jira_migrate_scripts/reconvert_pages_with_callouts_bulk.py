@@ -490,6 +490,26 @@ def finalize_html(h: str, asset_map: dict) -> str:
     return h
 
 
+def build_page_asset_map(cur, page_id: str, global_map: dict) -> dict:
+    """Return {filename → asset_id} preferring PAGE_DESCRIPTION assets
+    attached to this page, then falling back to the global map (which
+    is already pre-sorted to prefer PAGE_DESCRIPTION across all pages,
+    then other entity types)."""
+    cur.execute(
+        "SELECT attributes->>'name', id::text FROM file_assets "
+        "WHERE entity_identifier = %s AND entity_type = 'PAGE_DESCRIPTION' AND is_uploaded = true",
+        [page_id],
+    )
+    same_page = {}
+    for name, aid in cur.fetchall():
+        if name:
+            same_page[norm(name)] = aid
+    # Merge with global fallback (same-page wins)
+    merged = dict(global_map)
+    merged.update(same_page)
+    return merged
+
+
 def convert_page_body(body: str, asset_map: dict, space: str | None = None) -> str:
     # Order matters:
     #   1. ac:link → <a> (before ac: strip in finalize_html)
@@ -507,13 +527,21 @@ def main():
     target_ids = [a for a in sys.argv[1:] if a != "--apply"]
 
     cur = connection.cursor()
-    cur.execute("SELECT id::text, attributes->>'name' FROM file_assets WHERE is_uploaded=true")
+    # Priority order: PAGE_DESCRIPTION > COMMENT_DESCRIPTION > others
+    cur.execute(
+        "SELECT id::text, attributes->>'name', entity_type FROM file_assets WHERE is_uploaded=true "
+        "ORDER BY CASE entity_type WHEN 'PAGE_DESCRIPTION' THEN 0 "
+        "WHEN 'COMMENT_DESCRIPTION' THEN 1 "
+        "WHEN 'ISSUE_DESCRIPTION' THEN 2 "
+        "WHEN 'ISSUE_ATTACHMENT' THEN 3 ELSE 9 END"
+    )
     asset_map = {}
-    for aid, name in cur.fetchall():
+    for aid, name, _etype in cur.fetchall():
         if not name:
             continue
+        # First-wins with the priority ordering above
         asset_map.setdefault(norm(name), aid)
-    print(f"Loaded {len(asset_map)} filename → asset_id entries", file=sys.stderr)
+    print(f"Loaded {len(asset_map)} filename → asset_id entries (PAGE_DESCRIPTION prioritized)", file=sys.stderr)
 
     cur.execute(
         "SELECT id::text, external_id FROM pages "
@@ -571,7 +599,9 @@ def main():
             if target_ids and page_id not in target_ids:
                 continue
             space = ext_to_space.get(ext)
-            new_html = convert_page_body(body, asset_map, space)
+            # Per-page asset map: same-page PAGE_DESCRIPTION wins, then global priority
+            per_page_map = build_page_asset_map(cur, page_id, asset_map)
+            new_html = convert_page_body(body, per_page_map, space)
             # Drop lingering migration-footer markers/content
             new_html = re.sub(
                 r"<!--\s*migration:[a-z-]+\s*-->.*?(?=<!--\s*migration:|\Z)",
