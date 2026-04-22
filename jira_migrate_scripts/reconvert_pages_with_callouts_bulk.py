@@ -60,6 +60,10 @@ PLANE_CHILDREN: dict = {}
 # set; used to decide whether a Jira key like "GUDO-4" maps to a migrated Plane
 # project and should be rewritten to /browse/GUDO-4/.
 PLANE_PROJECT_IDENTIFIERS: set = set()
+# Populated by build_title_maps() — uppercase identifier OR lower-case name → project_id
+# so we can map a JQL clause like `project = "ARUHI ID"` or `project = GUDO` to a
+# Plane project's issues page.
+PLANE_PROJECT_LOOKUP: dict = {}
 # Set by main() before each page's convert_page_body call; read by convert_macro
 # to render children/pagetree macros into a real child-page list, and by
 # resolve_confluence_url to rewrite /download/attachments URLs via the
@@ -181,10 +185,18 @@ def build_title_maps(cur):
         rows.sort()
         PLANE_CHILDREN[parent_id] = [pid for _, _, pid in rows]
 
-    # Plane project identifiers (for Jira key → /browse/ rewrite)
-    global PLANE_PROJECT_IDENTIFIERS
-    cur.execute("SELECT DISTINCT identifier FROM projects WHERE identifier IS NOT NULL")
-    PLANE_PROJECT_IDENTIFIERS = {row[0].upper() for row in cur.fetchall() if row[0]}
+    # Plane project identifiers (for Jira key → /browse/ rewrite) and
+    # project lookup (for JQL `project = "..."` rewrite).
+    global PLANE_PROJECT_IDENTIFIERS, PLANE_PROJECT_LOOKUP
+    cur.execute("SELECT id::text, identifier, name FROM projects WHERE identifier IS NOT NULL")
+    PLANE_PROJECT_IDENTIFIERS = set()
+    PLANE_PROJECT_LOOKUP = {}
+    for proj_id, ident, pname in cur.fetchall():
+        if ident:
+            PLANE_PROJECT_IDENTIFIERS.add(ident.upper())
+            PLANE_PROJECT_LOOKUP.setdefault(ident.upper(), proj_id)
+        if pname:
+            PLANE_PROJECT_LOOKUP.setdefault(pname.strip().lower(), proj_id)
 
     global TITLE_TO_PLANE_URL, CID_TO_PLANE_URL
     TITLE_TO_PLANE_URL = {}
@@ -313,14 +325,28 @@ def convert_macro(attrs: str, inner: str, asset_map: dict) -> str:
                 f"</p>"
             )
         if jql:
-            import urllib.parse
-
-            encoded = urllib.parse.quote(jql)
+            # Try to map `project = "NAME"` or `project = IDENT` (or with `IN (..)`)
+            # from the JQL to a migrated Plane project. If found, link to that
+            # project's work-items page; otherwise fall back to workspace-views.
+            proj_id = None
+            proj_m = re.search(
+                r'project\s*=\s*"([^"]+)"|project\s*=\s*([A-Za-z][A-Za-z0-9_]*)',
+                jql,
+            )
+            if proj_m:
+                raw = (proj_m.group(1) or proj_m.group(2) or "").strip()
+                proj_id = PLANE_PROJECT_LOOKUP.get(raw.upper()) or PLANE_PROJECT_LOOKUP.get(raw.lower())
+            if proj_id:
+                href = f"{PLANE_BASE}/{WORKSPACE_SLUG}/projects/{proj_id}/issues/"
+                label = "🎫 Plane プロジェクトの課題一覧"
+            else:
+                href = f"{PLANE_BASE}/{WORKSPACE_SLUG}/workspace-views/all-issues/"
+                label = "🎫 Plane 全課題（元 Jira JQL に相当する絞り込み不可）"
             return (
                 f'<p class="{P_CLASS}">'
-                f'<a href="{JIRA_BASE}/issues/?jql={encoded}" target="_blank" rel="noopener noreferrer">'
-                f"🎫 元 Jira クエリ結果を表示</a>"
-                f"<br><em>JQL: {html_mod.escape(jql)[:200]}</em>"
+                f'<a href="{href}" target="_blank" rel="noopener noreferrer">'
+                f"{label}</a>"
+                f"<br><em>元 JQL: {html_mod.escape(jql)[:200]}</em>"
                 f"</p>"
             )
         return f'<p class="{P_CLASS}"><em>🎫 元 Jira 埋め込み（情報不足で復元不可）</em></p>'
