@@ -25,7 +25,7 @@ class GoogleOAuthProvider(OauthAdapter):
     provider = "google"
 
     def __init__(self, request, code=None, state=None, callback=None):
-        (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET) = get_configuration_value(
+        (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_HOSTED_DOMAIN) = get_configuration_value(
             [
                 {
                     "key": "GOOGLE_CLIENT_ID",
@@ -34,6 +34,10 @@ class GoogleOAuthProvider(OauthAdapter):
                 {
                     "key": "GOOGLE_CLIENT_SECRET",
                     "default": os.environ.get("GOOGLE_CLIENT_SECRET"),
+                },
+                {
+                    "key": "GOOGLE_HOSTED_DOMAIN",
+                    "default": os.environ.get("GOOGLE_HOSTED_DOMAIN", ""),
                 },
             ]
         )
@@ -57,6 +61,11 @@ class GoogleOAuthProvider(OauthAdapter):
             "prompt": "consent",
             "state": state,
         }
+        # Restrict Google account picker to a single Workspace domain.
+        # This is UI-only; the canonical domain check is server-side via
+        # ALLOWED_SIGNUP_DOMAINS in adapter/base.py __check_signup().
+        if GOOGLE_HOSTED_DOMAIN:
+            url_params["hd"] = GOOGLE_HOSTED_DOMAIN
         auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(url_params)}"
 
         super().__init__(

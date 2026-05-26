@@ -100,22 +100,44 @@ class Adapter:
         return
 
     def __check_signup(self, email):
-        """Check if sign up is enabled or not and raise exception if not enabled"""
+        """Check if sign up is enabled or not and raise exception if not enabled.
+
+        Three-tier policy when ENABLE_SIGNUP=0:
+          1. If the email domain is in ALLOWED_SIGNUP_DOMAINS (CSV) → allow.
+             Useful for "anyone with a @company.com address can sign in"
+             without seeding WorkspaceMemberInvite for every user.
+          2. Otherwise, if WorkspaceMemberInvite exists for this email → allow.
+          3. Otherwise → SIGNUP_DISABLED.
+        """
 
         # Get configuration value
-        (ENABLE_SIGNUP,) = get_configuration_value([
-            {"key": "ENABLE_SIGNUP", "default": os.environ.get("ENABLE_SIGNUP", "1")}
+        (ENABLE_SIGNUP, ALLOWED_SIGNUP_DOMAINS) = get_configuration_value([
+            {"key": "ENABLE_SIGNUP", "default": os.environ.get("ENABLE_SIGNUP", "1")},
+            {"key": "ALLOWED_SIGNUP_DOMAINS", "default": os.environ.get("ALLOWED_SIGNUP_DOMAINS", "")},
         ])
 
         # Check if sign up is disabled and invite is present or not
-        if ENABLE_SIGNUP == "0" and not WorkspaceMemberInvite.objects.filter(email=email).exists():
-            self.logger.warning("Sign up is disabled and invite is not present")
-            # Raise exception
-            raise AuthenticationException(
-                error_code=AUTHENTICATION_ERROR_CODES["SIGNUP_DISABLED"],
-                error_message="SIGNUP_DISABLED",
-                payload={"email": email},
-            )
+        if ENABLE_SIGNUP == "0":
+            # Tier 1: domain allowlist (CSV). Empty → tier skipped.
+            if ALLOWED_SIGNUP_DOMAINS:
+                email_domain = email.rsplit("@", 1)[-1].lower() if "@" in email else ""
+                allowed_domains = {
+                    d.strip().lower()
+                    for d in ALLOWED_SIGNUP_DOMAINS.split(",")
+                    if d.strip()
+                }
+                if email_domain and email_domain in allowed_domains:
+                    return True
+
+            # Tier 2: explicit per-email invite
+            if not WorkspaceMemberInvite.objects.filter(email=email).exists():
+                self.logger.warning("Sign up is disabled and invite is not present")
+                # Raise exception
+                raise AuthenticationException(
+                    error_code=AUTHENTICATION_ERROR_CODES["SIGNUP_DISABLED"],
+                    error_message="SIGNUP_DISABLED",
+                    payload={"email": email},
+                )
 
         return True
 
