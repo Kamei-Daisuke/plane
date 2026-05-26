@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # See the LICENSE file for details.
 
+# Python imports
+import logging
+import os
+
 # Django imports
 from django.utils import timezone
 
@@ -9,12 +13,16 @@ from django.utils import timezone
 from plane.db.models import (
     ProjectMember,
     ProjectMemberInvite,
+    Workspace,
     WorkspaceMember,
     WorkspaceMemberInvite,
 )
+from plane.license.utils.instance_value import get_configuration_value
 from plane.utils.cache import invalidate_cache_directly
 from plane.bgtasks.event_tracking_task import track_event
 from plane.utils.analytics_events import USER_JOINED_WORKSPACE
+
+logger = logging.getLogger(__name__)
 
 
 def process_workspace_project_invitations(user):
@@ -89,3 +97,74 @@ def process_workspace_project_invitations(user):
     # Delete all the invites
     workspace_member_invites.delete()
     project_member_invites.delete()
+
+
+def process_domain_auto_join(user):
+    """Auto-join a newly signed-up user to a default workspace if their email
+    domain is in ALLOWED_SIGNUP_DOMAINS.
+
+    Pairs with the domain-allowlist tier in __check_signup() (adapter/base.py).
+    Without this, domain-allowlisted users would land on the "create or join a
+    workspace" screen after signup. With it, they go straight into the
+    pre-configured workspace as a Member (role=15).
+
+    Configuration:
+      - ALLOWED_SIGNUP_DOMAINS (CSV): which email domains qualify
+      - DEFAULT_WORKSPACE_SLUG: the workspace to join (must already exist)
+
+    Both empty → this function is a no-op (back-compat default).
+    """
+    (ALLOWED_SIGNUP_DOMAINS, DEFAULT_WORKSPACE_SLUG) = get_configuration_value([
+        {"key": "ALLOWED_SIGNUP_DOMAINS", "default": os.environ.get("ALLOWED_SIGNUP_DOMAINS", "")},
+        {"key": "DEFAULT_WORKSPACE_SLUG", "default": os.environ.get("DEFAULT_WORKSPACE_SLUG", "")},
+    ])
+
+    if not ALLOWED_SIGNUP_DOMAINS or not DEFAULT_WORKSPACE_SLUG:
+        return
+
+    email = (user.email or "").lower()
+    email_domain = email.rsplit("@", 1)[-1] if "@" in email else ""
+    allowed_domains = {
+        d.strip().lower()
+        for d in ALLOWED_SIGNUP_DOMAINS.split(",")
+        if d.strip()
+    }
+
+    if not (email_domain and email_domain in allowed_domains):
+        return
+
+    workspace = Workspace.objects.filter(slug=DEFAULT_WORKSPACE_SLUG).first()
+    if not workspace:
+        logger.warning(
+            "process_domain_auto_join: DEFAULT_WORKSPACE_SLUG=%s not found, skipping",
+            DEFAULT_WORKSPACE_SLUG,
+        )
+        return
+
+    # Idempotent: noop if the user is already a member.
+    _, created = WorkspaceMember.objects.get_or_create(
+        workspace=workspace,
+        member=user,
+        defaults={"role": 15},  # Member
+    )
+
+    if created:
+        invalidate_cache_directly(
+            path=f"/api/workspaces/{workspace.slug}/members/",
+            url_params=False,
+            user=False,
+            multiple=True,
+        )
+        track_event.delay(
+            user_id=user.id,
+            event_name=USER_JOINED_WORKSPACE,
+            slug=workspace.slug,
+            event_properties={
+                "user_id": user.id,
+                "workspace_id": workspace.id,
+                "workspace_slug": workspace.slug,
+                "role": 15,
+                "joined_at": str(timezone.now().isoformat()),
+                "via": "domain_auto_join",
+            },
+        )
