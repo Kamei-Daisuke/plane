@@ -514,12 +514,23 @@ def convert_macro(attrs: str, inner: str, asset_map: dict) -> str:
         if not fname:
             # Legacy <ac:macro> stores the filename in a "name" or "file" param.
             # The "file" form (excel macro) often carries a leading "^" meaning
-            # "an attachment on the current page".
-            fname_raw = get_param(inner, "name").strip() or get_param(inner, "file").strip()
+            # "an attachment on the current page". The Stiltsoft "spreadsheets"
+            # macro instead uses "documentId" pointing at a .ssc document.
+            fname_raw = (
+                get_param(inner, "name").strip()
+                or get_param(inner, "file").strip()
+                or get_param(inner, "documentId").strip()
+            )
             if fname_raw:
                 fname = html_mod.unescape(fname_raw)
         if fname:
             fname = norm(fname.lstrip("^").strip())
+            # Stiltsoft stores a .ssc document id; the real attachment is the
+            # underlying xlsx ("X.xlsx.ssc" -> "X.xlsx", "名前.ssc" -> "名前.xlsx").
+            if fname.endswith(".ssc"):
+                fname = fname[:-4]
+                if not fname.lower().endswith((".xlsx", ".xls")):
+                    fname += ".xlsx"
             aid = asset_map.get(fname)
             icon = "📊" if name in {"excel", "spreadsheets", "viewxls"} else (
                 "📽" if name == "viewppt" else "📄"
