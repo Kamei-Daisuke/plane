@@ -8,6 +8,7 @@ via a balanced scanner instead of non-greedy regex.
 """
 import base64
 import html as html_mod
+import io
 import json
 import os
 import re
@@ -72,6 +73,12 @@ _CURRENT_PAGE_ID: str | None = None
 _CURRENT_ASSET_MAP: dict | None = None
 # Populated by build_cid_to_plane() at main() — for Confluence pageId → Plane URL resolution
 CID_TO_PLANE_URL: dict = {}
+
+# S3/object-storage access for embedding spreadsheet macros (excel/spreadsheets/
+# viewxls) as real HTML tables. Populated by main().
+_S3_CLIENT = None
+_S3_BUCKET: str | None = None
+_ASSET_KEY: dict = {}  # asset_id → storage key (file_assets.asset)
 
 
 def resolve_confluence_url(url: str) -> str:
@@ -289,6 +296,88 @@ def make_code_block(lang: str, code: str) -> str:
     return f'<pre data-code-content="{encoded}"><code{la}>​</code></pre>'
 
 
+def _xlsx_cell_str(v) -> str:
+    """Render an openpyxl cell value as a plain table-cell string."""
+    if v is None:
+        return ""
+    if isinstance(v, bool):
+        return "TRUE" if v else "FALSE"
+    if isinstance(v, float):
+        return str(int(v)) if v.is_integer() else repr(v)
+    if isinstance(v, datetime):
+        if v.hour or v.minute or v.second:
+            return v.strftime("%Y-%m-%d %H:%M")
+        return v.strftime("%Y-%m-%d")
+    return str(v)
+
+
+def xlsx_to_table_html(aid: str) -> str | None:
+    """Fetch an xlsx asset from object storage and render each sheet as a plain
+    <table> (finalize_html adds colwidth afterwards). Returns None on any
+    fetch/parse failure so the caller can fall back to a download link."""
+    if not aid or _S3_CLIENT is None:
+        return None
+    key = _ASSET_KEY.get(aid)
+    if not key:
+        return None
+    try:
+        data = _S3_CLIENT.get_object(Bucket=_S3_BUCKET, Key=key)["Body"].read()
+        import openpyxl
+
+        wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
+    except Exception as e:  # noqa: BLE001
+        print(f"  xlsx parse failed for {aid}: {e}", file=sys.stderr)
+        return None
+    tables = []
+    for ws in wb.worksheets:
+        # Merged cells → colspan/rowspan on the top-left cell; skip covered cells.
+        covered = set()
+        span = {}
+        for rng in ws.merged_cells.ranges:
+            span[(rng.min_row, rng.min_col)] = (
+                rng.max_col - rng.min_col + 1,
+                rng.max_row - rng.min_row + 1,
+            )
+            for rr in range(rng.min_row, rng.max_row + 1):
+                for cc in range(rng.min_col, rng.max_col + 1):
+                    if (rr, cc) != (rng.min_row, rng.min_col):
+                        covered.add((rr, cc))
+        grid = [[_xlsx_cell_str(c.value) for c in row] for row in ws.iter_rows()]
+        last_row = max(
+            (r for r, row in enumerate(grid) if any(v.strip() for v in row)),
+            default=-1,
+        )
+        last_col = max(
+            (c for row in grid for c, v in enumerate(row) if v.strip()),
+            default=-1,
+        )
+        if last_row < 0 or last_col < 0:
+            continue
+        trs = []
+        for r in range(last_row + 1):
+            cells = []
+            for c in range(last_col + 1):
+                rr, cc = r + 1, c + 1  # openpyxl is 1-indexed
+                if (rr, cc) in covered:
+                    continue
+                tag = "th" if r == 0 else "td"
+                attrs = ""
+                if (rr, cc) in span:
+                    cs, rs = span[(rr, cc)]
+                    if cs > 1:
+                        attrs += f' colspan="{cs}"'
+                    if rs > 1:
+                        attrs += f' rowspan="{rs}"'
+                val = grid[r][c] if c < len(grid[r]) else ""
+                text = html_mod.escape(val).replace("\n", "<br>")
+                cells.append(f"<{tag}{attrs}>{text}</{tag}>")
+            trs.append("<tr>" + "".join(cells) + "</tr>")
+        if trs:
+            tables.append("<table><tbody>" + "".join(trs) + "</tbody></table>")
+    wb.close()
+    return "".join(tables) if tables else None
+
+
 def get_param(inner: str, key: str) -> str:
     m = re.search(
         r'<ac:parameter\b[^>]*ac:name="' + re.escape(key) + r'"[^>]*>(.*?)</ac:parameter>',
@@ -421,24 +510,33 @@ def convert_macro(attrs: str, inner: str, asset_map: dict) -> str:
         if att_m:
             fn_m = re.search(r'ri:filename="([^"]+)"', att_m.group(1))
             if fn_m:
-                fname = norm(html_mod.unescape(fn_m.group(1)))
+                fname = html_mod.unescape(fn_m.group(1))
         if not fname:
-            # Fallback: ac:parameter name
-            fname_raw = get_param(inner, "name").strip()
+            # Legacy <ac:macro> stores the filename in a "name" or "file" param.
+            # The "file" form (excel macro) often carries a leading "^" meaning
+            # "an attachment on the current page".
+            fname_raw = get_param(inner, "name").strip() or get_param(inner, "file").strip()
             if fname_raw:
-                fname = norm(html_mod.unescape(fname_raw))
+                fname = html_mod.unescape(fname_raw)
         if fname:
+            fname = norm(fname.lstrip("^").strip())
             aid = asset_map.get(fname)
             icon = "📊" if name in {"excel", "spreadsheets", "viewxls"} else (
                 "📽" if name == "viewppt" else "📄"
             )
+            # Spreadsheet embeds: render the actual sheet inline as a table, then
+            # a download link to the original xlsx (preserves formatting/formulas).
+            table_html = ""
+            if name in {"excel", "spreadsheets", "viewxls"} and aid:
+                table_html = xlsx_to_table_html(aid) or ""
             if aid:
                 url = f"{PLANE_BASE}/api/assets/v2/workspaces/{WORKSPACE_SLUG}/{aid}/"
-                return (
+                link = (
                     f'<p class="{P_CLASS}">{icon} '
                     f'<a href="{url}" target="_blank" rel="noopener noreferrer">'
                     f'{html_mod.escape(fname)}</a></p>'
                 )
+                return table_html + link
             return (
                 f'<p class="{P_CLASS}">{icon} '
                 f'<em>未解決 embed: {html_mod.escape(fname)}</em></p>'
@@ -881,6 +979,16 @@ def convert_page_body(body: str, asset_map: dict, space: str | None = None) -> s
     #   3. Macros (info, expand, code, etc.)
     #   4. Finalize (images, layout strip, class decoration)
     #   5. Rewrite any remaining Confluence hrefs to Plane URLs
+    # Confluence wraps the spreadsheet macro in a <p>; since we now emit a
+    # <table> for excel/spreadsheets/viewxls, strip that wrapping <p> first —
+    # a <table> nested inside a <p> is invalid and TipTap drops it.
+    body = re.sub(
+        r'<p>\s*(<ac:(?:structured-)?macro\b[^>]*\bac:name="'
+        r'(?:excel|spreadsheets|viewxls)"[^>]*>.*?</ac:(?:structured-)?macro>)\s*</p>',
+        r"\1",
+        body,
+        flags=re.DOTALL,
+    )
     body = convert_ac_links(body, asset_map, space)
     body = convert_task_lists(body)
     converted = convert_all_macros(body, asset_map)
@@ -902,19 +1010,37 @@ def main():
     cur = connection.cursor()
     # Priority order: PAGE_DESCRIPTION > COMMENT_DESCRIPTION > others
     cur.execute(
-        "SELECT id::text, attributes->>'name', entity_type FROM file_assets WHERE is_uploaded=true "
+        "SELECT id::text, attributes->>'name', entity_type, asset FROM file_assets WHERE is_uploaded=true "
         "ORDER BY CASE entity_type WHEN 'PAGE_DESCRIPTION' THEN 0 "
         "WHEN 'COMMENT_DESCRIPTION' THEN 1 "
         "WHEN 'ISSUE_DESCRIPTION' THEN 2 "
         "WHEN 'ISSUE_ATTACHMENT' THEN 3 ELSE 9 END"
     )
     asset_map = {}
-    for aid, name, _etype in cur.fetchall():
+    global _ASSET_KEY, _S3_CLIENT, _S3_BUCKET
+    for aid, name, _etype, key in cur.fetchall():
+        _ASSET_KEY[aid] = key
         if not name:
             continue
         # First-wins with the priority ordering above
         asset_map.setdefault(norm(name), aid)
     print(f"Loaded {len(asset_map)} filename → asset_id entries (PAGE_DESCRIPTION prioritized)", file=sys.stderr)
+
+    # S3 client for embedding spreadsheet macros as inline tables.
+    try:
+        import boto3
+        from django.conf import settings
+
+        _S3_BUCKET = getattr(settings, "AWS_STORAGE_BUCKET_NAME", None)
+        _S3_CLIENT = boto3.client(
+            "s3",
+            endpoint_url=getattr(settings, "AWS_S3_ENDPOINT_URL", None),
+            aws_access_key_id=getattr(settings, "AWS_ACCESS_KEY_ID", None),
+            aws_secret_access_key=getattr(settings, "AWS_SECRET_ACCESS_KEY", None),
+            region_name=getattr(settings, "AWS_REGION", None) or "us-east-1",
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"S3 client init failed (spreadsheet embedding disabled): {e}", file=sys.stderr)
 
     cur.execute(
         "SELECT id::text, external_id FROM pages "
