@@ -786,6 +786,44 @@ def convert_task_lists(h: str) -> str:
     return TASK_LIST_RE.sub(repl_list, h)
 
 
+def _repair_orphan_table_fragments(h: str) -> str:
+    """An upstream macro/layout transform can drop a table's opening
+    <table><tbody><tr> while leaving the cell run and its </tbody></table>.
+    ProseMirror/TipTap then discards EVERY table in the document. Detect a
+    </table> that has no matching <table> before it and wrap the orphan
+    cell-run in a fresh <table><tbody><tr> (adding <td> if the run starts with
+    a closing cell) so it parses as a real table. Balanced tables are untouched.
+    """
+    if h.count("</table>") <= len(re.findall(r"<table\b", h)):
+        return h
+    tag_re = re.compile(r"<table\b[^>]*>|</table>")
+    out = []
+    last = 0
+    depth = 0
+    for m in tag_re.finditer(h):
+        if m.group(0) == "</table>":
+            if depth > 0:
+                depth -= 1
+                continue
+            # Orphan close: the run from `last` to here lost its <table> opener.
+            seg = h[last : m.end()]
+            cm = re.search(r"</?(?:td|th|tr|tbody|thead)\b", seg)
+            if cm is None:
+                out.append(seg)
+            else:
+                before = seg[: cm.start()]
+                cells = seg[cm.start() : -len("</table>")]
+                opener = "<table><tbody><tr>"
+                if re.match(r"</(?:td|th)\b", cells):
+                    opener += "<td>"
+                out.append(before + opener + cells + "</table>")
+            last = m.end()
+        else:
+            depth += 1
+    out.append(h[last:])
+    return "".join(out)
+
+
 def finalize_html(h: str, asset_map: dict) -> str:
     # Images
     def replace_image(m):
@@ -820,6 +858,10 @@ def finalize_html(h: str, asset_map: dict) -> str:
     # Drop remaining ac:/ri:
     h = re.sub(r"</?ac:[a-z-]+[^>]*>", "", h)
     h = re.sub(r"</?ri:[a-z-]+[^>]*/?>", "", h)
+
+    # Recover orphan table fragments (opening <table><tbody><tr> lost upstream)
+    # before colwidth assignment, so the recovered table is styled too.
+    h = _repair_orphan_table_fragments(h)
 
     # Table: always assign colwidth = EDITOR_WIDTH / num_cols so the editor
     # renders full-width tables. Handles nested tables correctly by processing
